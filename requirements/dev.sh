@@ -13,5 +13,5 @@ $LOCALAPPDATA/Programs/Python/$py_version/python.exe -m venv $venv_name
 source $venv_name/Scripts/activate
 
 # Install all necessary python packages. -U to upgrade if possible
-python -m pip  install -U pip
-pip install -U -r $txt_path
+python -m pip install -U pip
+python -m pip install -U -r $txt_path

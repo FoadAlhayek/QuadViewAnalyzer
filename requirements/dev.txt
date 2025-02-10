@@ -1,0 +1,6 @@
+# All packages used to run the app
+# Note, this should extend the requirements.txt with e.g. pytest etc.
+PySide6
+PyInstaller
+
+# Dev only
