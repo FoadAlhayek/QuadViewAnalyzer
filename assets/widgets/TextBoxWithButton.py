@@ -2,12 +2,11 @@
 @Author: Foad Alhayek
 @Description: A custom button widget that includes a display showcasing the name of the file that has been chosen.
 """
+import sys
+import pathlib
 from PySide6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QFileDialog
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QSize
-import os
-import sys
-import pathlib
 
 
 class TextBoxWithButton(QWidget):
@@ -43,7 +42,7 @@ class TextBoxWithButton(QWidget):
             }
         ''')
 
-        self.button.setIcon(QIcon(os.path.join(app_path, "assets", "icons", "three_dots.svg")))
+        self.button.setIcon(QIcon(str(pathlib.Path(app_path) / "assets" / "icons" / "three_dots.svg")))
         self.button.setStyleSheet('''
             QPushButton {
               padding: 0px;
@@ -89,7 +88,7 @@ class TextBoxWithButton(QWidget):
         # If Cancel or X is clicked, don't do anything
         if filepath != "":
             self.filepath = pathlib.Path(filepath)
-            filename = os.path.basename(self.filepath)
+            filename = self.filepath.name
             self.label.setText(filename)
 
 

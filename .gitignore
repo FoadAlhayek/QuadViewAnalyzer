@@ -1,3 +1,6 @@
+# Code snippets and tests of concepts
+x_playground/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
