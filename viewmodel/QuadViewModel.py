@@ -38,6 +38,10 @@ class QuadViewModel(QObject):
         """
         Stores user-picked signals in a dict with their corresponding timestamp.
         Dict format: {parent1: {ts, child1, child2}, parent2: {ts, child1}}
+        
+        NOTE: The function does not consider if the same parent-child exists in a different grandparent, e.g.,
+        grandparent1-parent1-child1 and grandparent2-parent1-child1, the grandparent2's parent-child will override the
+        original values. If that is an issue, expand the function to handle that scenario. For now, too much overhead.
 
         :param signal_path: An array where each element is a key in a dict
         """
