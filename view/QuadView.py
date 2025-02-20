@@ -6,8 +6,8 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
-from PySide6.QtWidgets import QWidget, QToolButton, QLabel, QHBoxLayout, QVBoxLayout, QComboBox, QGridLayout
-from PySide6.QtGui import QIcon, QFontDatabase, QPixmap
+from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 import pathlib
@@ -91,20 +91,39 @@ class QuadView(QWidget):
         self.slider.setRange(0, 1000)
         self.slider.setValue(0)
 
+        ######################
+        # TREE MENU SETTINGS #
+        ######################
+        tree_view = QTreeView()
+        tree_view.setMinimumWidth(200)
+        tree_view.setHeaderHidden(False)
+        tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
         ###################
         #  Other widgets  #
         ###################
         self.label_mat = QLabel("Select mat")
         self.text_box_button_mat = c_widgets.TextBoxWithButton(file_ext_filter="MATLAB file (*.mat)")
 
-        ###########################################
-        # Connect interactions with the ViewModel #
-        ###########################################
+        ##############################
+        # Connect with the ViewModel #
+        ##############################
+        self.tree_model = self._view_model.generate_tree_model()
+        tree_view.setModel(self.tree_model)
+        tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
+
         self.text_box_button_mat.button.clicked.connect(self.update_mat_path)
 
         #####################
         # Style the widgets #
         #####################
+        tree_view.setStyleSheet('''
+            QTreeView {
+              font-size: 8pt;
+              
+            }
+        ''')
+
         self.text_box_button_mat.set_size(WINDOW_WIDTH // 3 - int(2 * MARGIN_PX), 50)
         self.text_box_button_mat.setStyleSheet('''
             QLabel {
@@ -119,33 +138,51 @@ class QuadView(QWidget):
         #######################################
         # Create the layouts - Order matters! #
         #######################################
-        graph_layout = QVBoxLayout()
-        graph_layout.addWidget(self.glw)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(self.glw)
+        splitter.addWidget(tree_view)
 
-        test_layout = QVBoxLayout()
-        test_layout.addWidget(self.label_mat)
-        test_layout.addWidget(self.text_box_button_mat)
+        # test_layout = QVBoxLayout()
+        # test_layout.addWidget(self.label_mat)
+        # test_layout.addWidget(self.text_box_button_mat)
+
         ##############################
         # Change alignment & spacing #
         ##############################
-        test_layout.setSpacing(MARGIN_PX)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
 
         ###################
         # Combine layouts #
         ###################
-        content_layout = QHBoxLayout()
-        content_layout.addLayout(graph_layout)
-        content_layout.addLayout(test_layout)
+        #content_layout = QHBoxLayout()
+        #content_layout.addLayout(graph_layout)
+        #content_layout.addLayout(test_layout)
 
         ######################
         # Create main layout #
         ######################
         main_layout = QVBoxLayout()
-        main_layout.addLayout(content_layout)
+        main_layout.addWidget(splitter)
         main_layout.addWidget(self.slider)
 
         # Set the main layout
         self.setLayout(main_layout)
+
+    def on_tree_item_double_clicked(self, index):
+        """ Handles tree menu clicking features """
+        item = self.tree_model.itemFromIndex(index)
+
+        # Ignore parent nodes
+        if item.hasChildren():
+            return
+
+        item_path = []
+        while item is not None:
+            item_path.insert(0, item.text())
+            item = item.parent()
+
+        self._view_model.handle_item_selected(item_path)
 
     def update_mat_path(self):
         """ Updates the path to the current selected file in the backend """
