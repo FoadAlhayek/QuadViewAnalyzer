@@ -7,8 +7,10 @@ The View connects signals from the ViewModel and a function with equal amounts o
 Usage: main.py, QuadViewModel.py
 """
 from os import access
+from os.path import split
 
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow
+from PySide6.QtWidgets import (QWidget, QLabel, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
+                               QTextEdit)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
@@ -35,6 +37,7 @@ class QuadView(QMainWindow):
         WINDOW_WIDTH = int(1200)
         WINDOW_HEIGHT = int(800)
         LABEL_FONT_SIZE = "20pt"
+        TREE_FONT_SIZE = "8pt"
         MARGIN_PX = int(30)
 
         # Get the path to the folder containing the running script (required for exe to work properly)
@@ -114,6 +117,9 @@ class QuadView(QMainWindow):
         ###################
         #  Other widgets  #
         ###################
+        self.textbox_selected_signals = QTextEdit()
+        self.textbox_selected_signals.setReadOnly(True)
+
         self.label_mat = QLabel("Select mat")
         self.text_box_button_mat = c_widgets.TextBoxWithButton(file_ext_filter="MATLAB file (*.mat)")
 
@@ -129,7 +135,15 @@ class QuadView(QMainWindow):
         #####################
         self.tree_view.setStyleSheet('''
             QTreeView {
-              font-size: 8pt;
+              font-size: ''' + TREE_FONT_SIZE + ''';
+              background-color: ''' + self.theme.background + ''';
+              color: ''' + self.theme.text + ''';
+            }
+        ''')
+
+        self.textbox_selected_signals.setStyleSheet('''
+            QTextEdit {
+              font-size: ''' + TREE_FONT_SIZE + ''';
               background-color: ''' + self.theme.background + ''';
               color: ''' + self.theme.text + ''';
             }
@@ -149,32 +163,36 @@ class QuadView(QMainWindow):
         #######################################
         # Create the layouts - Order matters! #
         #######################################
+        tree_splitter = QSplitter(Qt.Orientation.Vertical)
+        tree_splitter.addWidget(self.tree_view)
+        tree_splitter.addWidget(self.textbox_selected_signals)
+
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.glw)
-        splitter.addWidget(self.tree_view)
-
-        # test_layout = QVBoxLayout()
-        # test_layout.addWidget(self.label_mat)
-        # test_layout.addWidget(self.text_box_button_mat)
+        splitter.addWidget(tree_splitter)
 
         ##############################
         # Change alignment & spacing #
         ##############################
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 1)
+        tree_splitter.setStretchFactor(0, 3)  # Tree menu
+        tree_splitter.setStretchFactor(1, 1)  # Selected signal display
 
-        ###################
-        # Combine layouts #
-        ###################
-        #content_layout = QHBoxLayout()
-        #content_layout.addLayout(graph_layout)
-        #content_layout.addLayout(test_layout)
+        splitter.setStretchFactor(0, 2)       # 2x2 plots
+        splitter.setStretchFactor(1, 1)       # The complete tree menu with display
 
         ######################
         # Create main layout #
         ######################
         main_layout.addWidget(splitter)
         main_layout.addWidget(self.slider)
+
+    def update_selected_signals_display(self):
+        """ Updates the text area to show which signals have been selected. """
+        selected = self._view_model.selected_signals_data
+        display_lines = [
+            f"• {parent}: {', '.join(key for key in signals if key != 'ts')}" for parent, signals in selected.items()
+        ]
+        self.textbox_selected_signals.setPlainText("\n".join(display_lines))
 
     def on_tree_item_double_clicked(self, index):
         """ Handles tree menu clicking features """
@@ -205,10 +223,12 @@ class QuadView(QMainWindow):
                 item.setBackground(QColor(self.theme.highlight))
                 item.setForeground(QColor(self.theme.highlight_text))
 
+        self.update_selected_signals_display()
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """
         self.clear_plots()
+        self.textbox_selected_signals.setPlainText("")
         self._view_model.deselect_all_signals()
 
         tree_model = self._view_model.generate_tree_model()
