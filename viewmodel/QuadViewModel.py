@@ -13,6 +13,9 @@ from PySide6.QtCore import QObject, QUrl, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 class QuadViewModel(QObject):
+    # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
+    signal_new_data_loaded = Signal()
+
     def __init__(self, model):
         super().__init__()
         self._model = model
@@ -20,6 +23,7 @@ class QuadViewModel(QObject):
         self.loaded_data = {}
         self.selected_signals = {}
         self.selected_signals_data = {}
+        self.accepted_file_types = [".mat", ".dat"]
 
     def set_mat(self, path: pathlib.Path):
         """ Stores the path of the selected file. """
@@ -35,18 +39,26 @@ class QuadViewModel(QObject):
             print("Test")
             return None
 
-    def handle_dropped_files(self, urls: list[QUrl]):
-        for url in urls:
-            filepath = pathlib.Path(url.toLocalFile())
+    def handle_dropped_files(self, filepaths: list[pathlib.Path]):
+        # To prevent loading in multiple files at the same time
+        current_mat = pathlib.Path("")
+        current_dat = pathlib.Path("")
+
+        for filepath in filepaths:
             file_ext = filepath.suffix
 
             if file_ext == ".mat":
-                print("MAT STUFF")
+                current_mat = filepath
             elif file_ext == ".dat":
-                print("DAT STUFF")
+                current_dat = filepath
             else:
                 continue
 
+        if current_mat.is_file():
+            print(current_mat)
+
+        if current_dat.is_file():
+            print(current_dat)
 
     def handle_item_selected(self, signal_path: list):
         """

@@ -6,6 +6,8 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
+from os import access
+
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow
 from PySide6.QtGui import QIcon, QDragEnterEvent
 from PySide6.QtCore import Qt
@@ -195,21 +197,37 @@ class QuadView(QMainWindow):
     def dragEnterEvent(self, event: QDragEnterEvent, /):
         """ This event triggers when a file is being dragged into the main window """
         if event.mimeData().hasUrls():
-            event.accept()
+            accept_drop = True
+
+            for url in event.mimeData().urls():
+                filepath = pathlib.Path(url.toLocalFile())
+
+                if filepath.suffix.lower() not in self._view_model.accepted_file_types:
+                    accept_drop = False
+                    break
+
+            if accept_drop:
+                event.accept()
+            else:
+                event.ignore()
         else:
             event.ignore()
 
     def dropEvent(self, event):
         """ This event triggers when a file is dropped into the main window. Get filepath(s) and send to ViewModel. """
-        if event.mimeData().hasUrls:
-            event.setDropAction(Qt.DropAction.CopyAction)
-            event.accept()
-            self._view_model.handle_dropped_files(event.mimeData().urls())
+        if event.mimeData().hasUrls():
+            accepted_files = []
 
-            # Change this loop and instead send the array to ViewModel
             for url in event.mimeData().urls():
-                filename = pathlib.Path(url.toLocalFile())
-                print(filename)
+                filepath = pathlib.Path(url.toLocalFile())
+                if filepath.suffix.lower() in self._view_model.accepted_file_types:
+                    accepted_files.append(filepath)
+
+            if accepted_files:
+                event.accept()  # Confirm that the drop was handled
+                self._view_model.handle_dropped_files(accepted_files)
+            else:
+                event.ignore()
         else:
             event.ignore()
 
