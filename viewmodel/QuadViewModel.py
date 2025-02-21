@@ -68,6 +68,11 @@ class QuadViewModel(QObject):
             self.update_video_file()
 
     def is_signal_already_selected(self, signal_path: list) -> bool:
+        """
+        Helper function for the View, to know if the signal is selected and exists already in the backend (ViewModel).
+        :param signal_path: An array where each element is a key in a dict
+        :return: Bool if the signal exists in ViewModel.
+        """
         if self._model.invalid_signal(signal_path):
             return False
 
@@ -81,6 +86,11 @@ class QuadViewModel(QObject):
         return False
 
     def deselect_item(self, signal_path: list) -> bool:
+        """
+        Deselects the signal, see select_item() for more information.
+        :param signal_path: An array where each element is a key in a dict
+        :return: Bool if the signal was removed
+        """
         if self._model.invalid_signal(signal_path):
             return False
 
