@@ -22,7 +22,6 @@ class QuadViewModel(QObject):
         self.mat = pathlib.Path("")
         self.dat = pathlib.Path("")
         self.loaded_data = {}
-        self.selected_signals = {}
         self.selected_signals_data = {}
         self.accepted_file_types = [".mat", ".dat"]
 
@@ -33,6 +32,9 @@ class QuadViewModel(QObject):
 
     def loadmat(self):
         self.loaded_data = self._model.loadmat(self.mat)
+
+    def deselect_all_signals(self):
+        self.selected_signals_data = {}
 
     def update_data_file(self):
         self.loadmat()
@@ -65,7 +67,38 @@ class QuadViewModel(QObject):
             self.dat = current_dat
             self.update_video_file()
 
-    def handle_item_selected(self, signal_path: list):
+    def is_signal_already_selected(self, signal_path: list) -> bool:
+        if self._model.invalid_signal(signal_path):
+            return False
+
+        parent = signal_path[-2]
+        child = signal_path[-1]
+
+        if parent in self.selected_signals_data:
+            if child in self.selected_signals_data[parent]:
+                return True
+
+        return False
+
+    def deselect_item(self, signal_path: list) -> bool:
+        if self._model.invalid_signal(signal_path):
+            return False
+
+        parent = signal_path[-2]
+        child = signal_path[-1]
+
+        try:
+            # Delete the entire parent dict if only the ts and child key exists, otherwise delete the child only
+            if len(self.selected_signals_data[parent]) <= 2:
+                del self.selected_signals_data[parent]
+            else:
+                del self.selected_signals_data[parent][child]
+        except KeyError:
+            return False
+
+        return True
+
+    def select_item(self, signal_path: list) -> bool:
         """
         Stores user-picked signals in a dict with their corresponding timestamp.
         Dict format: {parent1: {ts, child1, child2}, parent2: {ts, child1}}
@@ -75,7 +108,11 @@ class QuadViewModel(QObject):
         original values. If that is an issue, expand the function to handle that scenario. For now, too much overhead.
 
         :param signal_path: An array where each element is a key in a dict
+        :return: Bool if the signal was added
         """
+        if self._model.invalid_signal(signal_path):
+            return False
+
         temp_data = self.loaded_data
         parent = None
 
@@ -91,10 +128,12 @@ class QuadViewModel(QObject):
                 self.selected_signals_data[parent] = {"ts": temp_data.get("TimestampLogfile", [])}
 
         signal_key = signal_path[-1]
-        if parent:
-            self.selected_signals_data[parent][signal_key] = temp_data.get(signal_key, [])
-        else:
+        if not parent:
             print(f"Timestamp for {signal_key} was not found! Skipping signal.")
+            return False
+
+        self.selected_signals_data[parent][signal_key] = temp_data.get(signal_key, [])
+        return True
 
     def generate_tree_model(self) -> QStandardItemModel:
         """ Transform a nested dictionary's keys into a QT tree menu. """

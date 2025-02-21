@@ -34,14 +34,14 @@ class LightTheme(Theme):
 
 
 class DarkTheme(Theme):
-    background = "#03111a"
-    foreground = "#03111a"
-    text = "#121212"
-    header_text = "#ffffff"
-    label_text = "#ffffff"
-    button_text = "#121212"
-    highlight_text = "#6b90ab"
-    highlight = "#6b90ab"
+    background = "#1e1a16"
+    foreground = "#f5ece9"
+    text = "#f5ece9"
+    header_text = "#f5ece9"
+    label_text = "#f5ece9"
+    button_text = "#141414"
+    highlight_text = "#141414"
+    highlight = "#d77f48"
 
 
 class EasterEggTheme(Theme):

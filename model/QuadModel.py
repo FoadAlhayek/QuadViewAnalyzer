@@ -24,6 +24,10 @@ class QuadModel:
     def loadmat(filepath):
         return loadmat(filepath)
 
+    @staticmethod
+    def invalid_signal(path) -> bool:
+        """ Function can be expanded in the future """
+        return len(path) < 2
 
 if __name__ == '__main__':
     pass

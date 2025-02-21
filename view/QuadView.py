@@ -9,7 +9,7 @@ Usage: main.py, QuadViewModel.py
 from os import access
 
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow
-from PySide6.QtGui import QIcon, QDragEnterEvent
+from PySide6.QtGui import QIcon, QDragEnterEvent, QColor
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 import pathlib
@@ -53,11 +53,11 @@ class QuadView(QMainWindow):
         main_layout = QVBoxLayout()
         central_widget.setLayout(main_layout)
 
-        theme = LightTheme()
+        self.theme = LightTheme()
         self.setWindowTitle("QuadViewAnalyzer")
         self.setWindowIcon(QIcon(str(pathlib.Path(app_path) / "assets" / "icons" / "gui_logo.ico")))
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.setStyleSheet(f"background-color: {theme.background};")
+        self.setStyleSheet(f"background-color: {self.theme.background};")
         self.acceptDrops()
 
         #########################################
@@ -109,6 +109,7 @@ class QuadView(QMainWindow):
         self.tree_view.setMinimumWidth(200)
         self.tree_view.setHeaderHidden(False)
         self.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tree_view.setSelectionMode(QAbstractItemView.NoSelection) # To manually be able to handle highlighting
 
         ###################
         #  Other widgets  #
@@ -129,19 +130,21 @@ class QuadView(QMainWindow):
         self.tree_view.setStyleSheet('''
             QTreeView {
               font-size: 8pt;
+              background-color: ''' + self.theme.background + ''';
+              color: ''' + self.theme.text + ''';
             }
         ''')
 
         self.text_box_button_mat.set_size(WINDOW_WIDTH // 3 - int(2 * MARGIN_PX), 50)
         self.text_box_button_mat.setStyleSheet('''
             QLabel {
-              background-color: ''' + theme.inactive_button + ''';
-              color: ''' + theme.button_text + ''';
+              background-color: ''' + self.theme.inactive_button + ''';
+              color: ''' + self.theme.button_text + ''';
             }
         ''')
 
         self.label_mat.setFixedWidth(self.text_box_button_mat.width())
-        self.label_mat.setStyleSheet(f"font-size: {LABEL_FONT_SIZE}; color: {theme.label_text}")
+        self.label_mat.setStyleSheet(f"font-size: {LABEL_FONT_SIZE}; color: {self.theme.label_text}")
 
         #######################################
         # Create the layouts - Order matters! #
@@ -181,16 +184,32 @@ class QuadView(QMainWindow):
         if item.hasChildren():
             return
 
+        # Build dict path to be sent to ViewModel
         item_path = []
-        while item is not None:
-            item_path.insert(0, item.text())
-            item = item.parent()
+        temp_item = item
+        while temp_item is not None:
+            item_path.insert(0, temp_item.text())
+            temp_item = temp_item.parent()
 
-        self._view_model.handle_item_selected(item_path)
+        if self._view_model.is_signal_already_selected(item_path):
+            signal_deleted = self._view_model.deselect_item(item_path)
+
+            if signal_deleted:
+                item.setBackground(QColor(self.theme.background))
+                item.setForeground(QColor(self.theme.text))
+        else:
+            signal_added = self._view_model.select_item(item_path)
+
+            # Highlight only if it got added in the backend
+            if signal_added:
+                item.setBackground(QColor(self.theme.highlight))
+                item.setForeground(QColor(self.theme.highlight_text))
+
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """
         self.clear_plots()
+        self._view_model.deselect_all_signals()
 
         tree_model = self._view_model.generate_tree_model()
         self.tree_view.setModel(tree_model)
