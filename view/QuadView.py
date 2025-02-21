@@ -6,8 +6,8 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
-from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView
-from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow
+from PySide6.QtGui import QIcon, QDragEnterEvent
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 import pathlib
@@ -19,7 +19,7 @@ from pyqtgraph import GraphicsLayoutWidget
 import assets.widgets as c_widgets
 from assets.palettes.Palette import LightTheme, DarkTheme  # noqa
 
-class QuadView(QWidget):
+class QuadView(QMainWindow):
     def __init__(self, view_model):
         super().__init__()
 
@@ -43,11 +43,19 @@ class QuadView(QWidget):
         ###############
         # Init the UI #
         ###############
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+
+        # Init the main layout
+        main_layout = QVBoxLayout()
+        central_widget.setLayout(main_layout)
+
         theme = LightTheme()
         self.setWindowTitle("QuadViewAnalyzer")
         self.setWindowIcon(QIcon(str(pathlib.Path(app_path) / "assets" / "icons" / "gui_logo.ico")))
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.setStyleSheet(f"background-color: {theme.background};")
+        self.acceptDrops()
 
         #########################################
         # Define the widgets and their settings #
@@ -162,12 +170,8 @@ class QuadView(QWidget):
         ######################
         # Create main layout #
         ######################
-        main_layout = QVBoxLayout()
         main_layout.addWidget(splitter)
         main_layout.addWidget(self.slider)
-
-        # Set the main layout
-        self.setLayout(main_layout)
 
     def on_tree_item_double_clicked(self, index):
         """ Handles tree menu clicking features """
@@ -187,6 +191,27 @@ class QuadView(QWidget):
     def update_mat_path(self):
         """ Updates the path to the current selected file in the backend """
         self._view_model.set_mat(self.text_box_button_mat.filepath)
+
+    def dragEnterEvent(self, event: QDragEnterEvent, /):
+        """ This event triggers when a file is being dragged into the main window """
+        if event.mimeData().hasUrls():
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event):
+        """ This event triggers when a file is dropped into the main window. Get filepath(s) and send to ViewModel. """
+        if event.mimeData().hasUrls:
+            event.setDropAction(Qt.DropAction.CopyAction)
+            event.accept()
+            self._view_model.handle_dropped_files(event.mimeData().urls())
+
+            # Change this loop and instead send the array to ViewModel
+            for url in event.mimeData().urls():
+                filename = pathlib.Path(url.toLocalFile())
+                print(filename)
+        else:
+            event.ignore()
 
 if __name__ == '__main__':
     pass

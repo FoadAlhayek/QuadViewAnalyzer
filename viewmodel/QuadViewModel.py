@@ -9,7 +9,7 @@ emits back the result to the View.
 Usage: main.py, QuadView.py
 """
 import pathlib
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, QUrl, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 class QuadViewModel(QObject):
@@ -23,7 +23,8 @@ class QuadViewModel(QObject):
 
     def set_mat(self, path: pathlib.Path):
         """ Stores the path of the selected file. """
-        self.mat = path
+        if path.suffix == ".mat":
+            self.mat = path
 
     def loadmat(self):
         self.loaded_data = self._model.loadmat(self.mat)
@@ -34,11 +35,24 @@ class QuadViewModel(QObject):
             print("Test")
             return None
 
+    def handle_dropped_files(self, urls: list[QUrl]):
+        for url in urls:
+            filepath = pathlib.Path(url.toLocalFile())
+            file_ext = filepath.suffix
+
+            if file_ext == ".mat":
+                print("MAT STUFF")
+            elif file_ext == ".dat":
+                print("DAT STUFF")
+            else:
+                continue
+
+
     def handle_item_selected(self, signal_path: list):
         """
         Stores user-picked signals in a dict with their corresponding timestamp.
         Dict format: {parent1: {ts, child1, child2}, parent2: {ts, child1}}
-        
+
         NOTE: The function does not consider if the same parent-child exists in a different grandparent, e.g.,
         grandparent1-parent1-child1 and grandparent2-parent1-child1, the grandparent2's parent-child will override the
         original values. If that is an issue, expand the function to handle that scenario. For now, too much overhead.
@@ -71,7 +85,7 @@ class QuadViewModel(QObject):
         model.setHorizontalHeaderLabels(["Signals"])
 
         # TODO, DELETE THIS LATER WHEN LOADING WORKS
-        self.set_mat(r"C:\Users\foadal\Documents\Tools\AnalysTool_JN\data\coll_fcw_aeb.mat")
+        self.set_mat(pathlib.Path(r"C:\Users\foadal\Documents\Tools\AnalysTool_JN\data\coll_fcw_aeb.mat"))
         self.loadmat()
 
         if self.loaded_data == {}:
