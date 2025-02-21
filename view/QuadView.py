@@ -27,6 +27,7 @@ class QuadView(QMainWindow):
 
         # Init the ViewModel and connect the signals with a method
         self._view_model = view_model
+        self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
 
         ##################
         # Init constants #
@@ -104,10 +105,10 @@ class QuadView(QMainWindow):
         ######################
         # TREE MENU SETTINGS #
         ######################
-        tree_view = QTreeView()
-        tree_view.setMinimumWidth(200)
-        tree_view.setHeaderHidden(False)
-        tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tree_view = QTreeView()
+        self.tree_view.setMinimumWidth(200)
+        self.tree_view.setHeaderHidden(False)
+        self.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         ###################
         #  Other widgets  #
@@ -118,19 +119,16 @@ class QuadView(QMainWindow):
         ##############################
         # Connect with the ViewModel #
         ##############################
-        self.tree_model = self._view_model.generate_tree_model()
-        tree_view.setModel(self.tree_model)
-        tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
+        self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
 
         self.text_box_button_mat.button.clicked.connect(self.update_mat_path)
 
         #####################
         # Style the widgets #
         #####################
-        tree_view.setStyleSheet('''
+        self.tree_view.setStyleSheet('''
             QTreeView {
               font-size: 8pt;
-              
             }
         ''')
 
@@ -150,7 +148,7 @@ class QuadView(QMainWindow):
         #######################################
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.glw)
-        splitter.addWidget(tree_view)
+        splitter.addWidget(self.tree_view)
 
         # test_layout = QVBoxLayout()
         # test_layout.addWidget(self.label_mat)
@@ -177,7 +175,7 @@ class QuadView(QMainWindow):
 
     def on_tree_item_double_clicked(self, index):
         """ Handles tree menu clicking features """
-        item = self.tree_model.itemFromIndex(index)
+        item = self.tree_view.model().itemFromIndex(index)
 
         # Ignore parent nodes
         if item.hasChildren():
@@ -189,6 +187,16 @@ class QuadView(QMainWindow):
             item = item.parent()
 
         self._view_model.handle_item_selected(item_path)
+
+    def on_data_file_load(self):
+        """ Called when a new file is loaded. Clears and refreshes the main window. """
+        self.clear_plots()
+
+        tree_model = self._view_model.generate_tree_model()
+        self.tree_view.setModel(tree_model)
+
+    def clear_plots(self):
+        pass
 
     def update_mat_path(self):
         """ Updates the path to the current selected file in the backend """

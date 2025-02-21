@@ -14,12 +14,13 @@ from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
-    signal_new_data_loaded = Signal()
+    signal_new_data_loaded = Signal()   # Signal to notify the View that a new data file is loaded
 
     def __init__(self, model):
         super().__init__()
         self._model = model
         self.mat = pathlib.Path("")
+        self.dat = pathlib.Path("")
         self.loaded_data = {}
         self.selected_signals = {}
         self.selected_signals_data = {}
@@ -33,11 +34,12 @@ class QuadViewModel(QObject):
     def loadmat(self):
         self.loaded_data = self._model.loadmat(self.mat)
 
-    def start_qva(self):
-        print("Hello", self._model.ready_to_run(self.mat), self.mat)
-        if not self._model.ready_to_run(self.mat):
-            print("Test")
-            return None
+    def update_data_file(self):
+        self.loadmat()
+        self.signal_new_data_loaded.emit()
+
+    def update_video_file(self):
+        pass
 
     def handle_dropped_files(self, filepaths: list[pathlib.Path]):
         # To prevent loading in multiple files at the same time
@@ -54,11 +56,14 @@ class QuadViewModel(QObject):
             else:
                 continue
 
+        # Update
         if current_mat.is_file():
-            print(current_mat)
+            self.mat = current_mat
+            self.update_data_file()
 
         if current_dat.is_file():
-            print(current_dat)
+            self.dat = current_dat
+            self.update_video_file()
 
     def handle_item_selected(self, signal_path: list):
         """
@@ -95,10 +100,6 @@ class QuadViewModel(QObject):
         """ Transform a nested dictionary's keys into a QT tree menu. """
         model = QStandardItemModel()
         model.setHorizontalHeaderLabels(["Signals"])
-
-        # TODO, DELETE THIS LATER WHEN LOADING WORKS
-        self.set_mat(pathlib.Path(r"C:\Users\foadal\Documents\Tools\AnalysTool_JN\data\coll_fcw_aeb.mat"))
-        self.loadmat()
 
         if self.loaded_data == {}:
             return model

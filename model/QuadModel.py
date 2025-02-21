@@ -21,10 +21,6 @@ class QuadModel:
             self.app_path = pathlib.Path(__file__).parent.parent
 
     @staticmethod
-    def ready_to_run(mat_path: pathlib.Path):
-        return mat_path.is_file() and mat_path.suffix == ".mat"
-
-    @staticmethod
     def loadmat(filepath):
         return loadmat(filepath)
 
