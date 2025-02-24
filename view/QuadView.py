@@ -6,11 +6,8 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
-from os import access
-from os.path import split
-
-from PySide6.QtWidgets import (QWidget, QLabel, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
-                               QTextEdit, QLineEdit)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow, QTextEdit,
+                               QLineEdit)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
@@ -20,7 +17,6 @@ from pyqtgraph import GraphicsLayoutWidget
 
 
 # Internal imports
-import assets.widgets as c_widgets
 from assets.palettes.Palette import LightTheme, DarkTheme  # noqa
 
 class QuadView(QMainWindow):
@@ -36,9 +32,7 @@ class QuadView(QMainWindow):
         ##################
         WINDOW_WIDTH = int(1200)
         WINDOW_HEIGHT = int(800)
-        LABEL_FONT_SIZE = "20pt"
         TREE_FONT_SIZE = "8pt"
-        MARGIN_PX = int(30)
 
         # Get the path to the folder containing the running script (required for exe to work properly)
         if getattr(sys, 'frozen', False):
@@ -67,43 +61,43 @@ class QuadView(QMainWindow):
         # Define the widgets and their settings #
         #########################################
         # Init subplots
-        self.glw = GraphicsLayoutWidget()
+        glw = GraphicsLayoutWidget()
 
         ###################
         #    TOP LEFT     #
         #   Video Frames  #
         ###################
-        self.video_ax = self.glw.addPlot(row=0, col=0, title="Camera POV")
-        self.video_ax.hideAxis("bottom")
-        self.video_ax.hideAxis("left")
+        video_ax = glw.addPlot(row=0, col=0, title="Camera POV")
+        video_ax.hideAxis("bottom")
+        video_ax.hideAxis("left")
 
         ###################
         #    TOP RIGHT    #
         #  Analysis Graph #
         ###################
-        self.graph_ax = self.glw.addPlot(row=0, col=1, title="Graph analysis")
+        graph_ax = glw.addPlot(row=0, col=1, title="Graph analysis")
 
         ###################
         #   BOTTOM LEFT   #
         #   Data Insight  #
         ###################
-        self.di_ax = self.glw.addPlot(row=1, col=0, title="Data insight")
-        self.di_ax.hideAxis("bottom")
-        self.di_ax.hideAxis("left")
+        di_ax = glw.addPlot(row=1, col=0, title="Data insight")
+        di_ax.hideAxis("bottom")
+        di_ax.hideAxis("left")
 
         ###################
         #  BOTTOM RIGHT   #
         #  Birdseye View  #
         ###################
-        self.birds_ax = self.glw.addPlot(row=1, col=1)
-        self.birds_ax.addItem(pg.ScatterPlotItem())
+        birds_ax = glw.addPlot(row=1, col=1)
+        birds_ax.addItem(pg.ScatterPlotItem())
 
         ###################
         # SLIDER SETTINGS #
         ###################
-        self.slider = pg.QtWidgets.QSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(0, 1000)
-        self.slider.setValue(0)
+        slider = pg.QtWidgets.QSlider(Qt.Orientation.Horizontal)
+        slider.setRange(0, 1000)
+        slider.setValue(0)
 
         ######################
         # TREE MENU SETTINGS #
@@ -117,22 +111,17 @@ class QuadView(QMainWindow):
         ###################
         #  Other widgets  #
         ###################
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("Search...")
-        self.search_bar.textChanged.connect(self.on_search_text_changed)
+        search_bar = QLineEdit()
+        search_bar.setPlaceholderText("Search...")
+        search_bar.textChanged.connect(self.on_search_text_changed)
 
         self.textbox_selected_signals = QTextEdit()
         self.textbox_selected_signals.setReadOnly(True)
-
-        self.label_mat = QLabel("Select mat")
-        self.text_box_button_mat = c_widgets.TextBoxWithButton(file_ext_filter="MATLAB file (*.mat)")
 
         ##############################
         # Connect with the ViewModel #
         ##############################
         self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
-
-        self.text_box_button_mat.button.clicked.connect(self.update_mat_path)
 
         #####################
         # Style the widgets #
@@ -145,7 +134,7 @@ class QuadView(QMainWindow):
             }
         ''')
 
-        self.search_bar.setStyleSheet('''
+        search_bar.setStyleSheet('''
             QLineEdit {
               font-size: ''' + TREE_FONT_SIZE + ''';
               background-color: ''' + self.theme.background + ''';
@@ -161,27 +150,16 @@ class QuadView(QMainWindow):
             }
         ''')
 
-        self.text_box_button_mat.set_size(WINDOW_WIDTH // 3 - int(2 * MARGIN_PX), 50)
-        self.text_box_button_mat.setStyleSheet('''
-            QLabel {
-              background-color: ''' + self.theme.inactive_button + ''';
-              color: ''' + self.theme.button_text + ''';
-            }
-        ''')
-
-        self.label_mat.setFixedWidth(self.text_box_button_mat.width())
-        self.label_mat.setStyleSheet(f"font-size: {LABEL_FONT_SIZE}; color: {self.theme.label_text}")
-
         #######################################
         # Create the layouts - Order matters! #
         #######################################
         tree_splitter = QSplitter(Qt.Orientation.Vertical)
-        tree_splitter.addWidget(self.search_bar)
+        tree_splitter.addWidget(search_bar)
         tree_splitter.addWidget(self.tree_view)
         tree_splitter.addWidget(self.textbox_selected_signals)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(self.glw)
+        splitter.addWidget(glw)
         splitter.addWidget(tree_splitter)
 
         ##############################
@@ -198,7 +176,7 @@ class QuadView(QMainWindow):
         # Create main layout #
         ######################
         main_layout.addWidget(splitter)
-        main_layout.addWidget(self.slider)
+        main_layout.addWidget(slider)
 
     def on_search_text_changed(self, search_query):
         """ Updates the filter of the proxy model based on the search text. """
@@ -256,10 +234,6 @@ class QuadView(QMainWindow):
 
     def clear_plots(self):
         pass
-
-    def update_mat_path(self):
-        """ Updates the path to the current selected file in the backend """
-        self._view_model.set_mat(self.text_box_button_mat.filepath)
 
     def dragEnterEvent(self, event: QDragEnterEvent, /):
         """ This event triggers when a file is being dragged into the main window """
