@@ -9,8 +9,10 @@ emits back the result to the View.
 Usage: main.py, QuadView.py
 """
 import pathlib
-from PySide6.QtCore import QObject, QUrl, Qt, Signal
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtCore import QObject, Signal, QRegularExpression, QTimer
+
+# Internal imports
+from viewmodel.helpers.tree_menu_search_filter import CustomFilterProxyModel
 
 class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
@@ -24,11 +26,42 @@ class QuadViewModel(QObject):
         self.loaded_data = {}
         self.selected_signals_data = {}
         self.accepted_file_types = [".mat", ".dat"]
+        self._proxy_model = CustomFilterProxyModel()
+
+        # Init search filter timer
+        self.search_timer = QTimer()
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self.apply_filter)
+        self.latest_search_text = ""
 
     def set_mat(self, path: pathlib.Path):
         """ Stores the path of the selected file. """
         if path.suffix == ".mat":
             self.mat = path
+
+    def update_tree_model(self):
+        """ Regenerate the tree model from the loaded data and update the proxy model. """
+        tree_model = self._model.generate_tree_model(self.loaded_data)
+        self._proxy_model.setSourceModel(tree_model)
+        return self._proxy_model
+
+    def set_filter_text(self, text: str):
+        """
+        The filter text is set here. The filtering process is initiated in apply_filter() after a brief delay,
+        allowing time for any additional key presses before processing.
+
+        :param text: Search query text
+        """
+        self.search_timer.stop()          # Stops the timer
+        self.search_timer.start(200)      # Restart the timer
+        self.latest_search_text = text    # Sets the latest text
+
+    def apply_filter(self):
+        """ Converts a wildcard search into a regex pattern and sets the filter when the search_timer hits 0. """
+        pattern = self.latest_search_text.replace("*", ".*")
+        regex = QRegularExpression(pattern)
+        regex.setPatternOptions(QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self._proxy_model.setFilterRegularExpression(regex)
 
     def loadmat(self):
         self.loaded_data = self._model.loadmat(self.mat)
@@ -144,29 +177,6 @@ class QuadViewModel(QObject):
 
         self.selected_signals_data[parent][signal_key] = temp_data.get(signal_key, [])
         return True
-
-    def generate_tree_model(self) -> QStandardItemModel:
-        """ Transform a nested dictionary's keys into a QT tree menu. """
-        model = QStandardItemModel()
-        model.setHorizontalHeaderLabels(["Signals"])
-
-        if self.loaded_data == {}:
-            return model
-
-        root_item = model.invisibleRootItem()
-        stack = [(root_item, self.loaded_data)]
-
-        while stack:
-            current_dict, current_data = stack.pop()
-
-            if isinstance(current_data, dict):
-                for key, value in current_data.items():
-                    key_item = QStandardItem(str(key))
-                    current_dict.appendRow(key_item)
-
-                    if isinstance(value, dict):
-                        stack.append((key_item, value))
-        return model
 
 if __name__ == '__main__':
     pass
