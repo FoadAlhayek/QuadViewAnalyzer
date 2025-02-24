@@ -76,7 +76,7 @@ class QuadView(QMainWindow):
         ###################
         self.graph_ax = glw.addPlot(row=0, col=1, title="Graph analysis")
         self.graph_plots = {}
-        legend = self.graph_ax.addLegend(offset=(-10, 10))
+        legend = self.graph_ax.addLegend(offset=(-10, 10), labelTextColor=self.theme.legend_text)
         legend.setScale(0.8)
 
         ###################
