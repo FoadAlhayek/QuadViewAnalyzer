@@ -13,7 +13,7 @@ from viewmodel.QuadViewModel import QuadViewModel
 
 app = QApplication(sys.argv)
 app.setStyleSheet("* {font-family: Roboto;"
-                  "font-size: 20px;}")
+                  "font-size: 12px;}")
 model = QuadModel()
 view_model = QuadViewModel(model)
 view = QuadView(view_model)

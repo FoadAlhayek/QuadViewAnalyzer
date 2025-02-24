@@ -100,6 +100,25 @@ class QuadViewModel(QObject):
             self.dat = current_dat
             self.update_video_file()
 
+    def get_signal_data(self, signal_path) -> tuple[list, list, str]:
+        ts = []
+        val = []
+        signal_name = ""
+
+        if self._model.invalid_signal(signal_path):
+            return ts, val, signal_name
+
+        parent = signal_path[-2]
+        child = signal_path[-1]
+
+        if parent in self.selected_signals_data:
+            if child in self.selected_signals_data[parent]:
+                ts = self.selected_signals_data[parent]["ts"]
+                val = self.selected_signals_data[parent][child]
+                signal_name = parent + "/" + child
+
+        return ts, val, signal_name
+
     def is_signal_already_selected(self, signal_path: list) -> bool:
         """
         Helper function for the View, to know if the signal is selected and exists already in the backend (ViewModel).
@@ -118,14 +137,15 @@ class QuadViewModel(QObject):
 
         return False
 
-    def deselect_item(self, signal_path: list) -> bool:
+    def deselect_item(self, signal_path: list) -> tuple[bool, str]:
         """
         Deselects the signal, see select_item() for more information.
         :param signal_path: An array where each element is a key in a dict
-        :return: Bool if the signal was removed
+        :return: Bool if the signal was removed and the signal name that was deleted
         """
+        signal_name = ""
         if self._model.invalid_signal(signal_path):
-            return False
+            return False, signal_name
 
         parent = signal_path[-2]
         child = signal_path[-1]
@@ -136,10 +156,11 @@ class QuadViewModel(QObject):
                 del self.selected_signals_data[parent]
             else:
                 del self.selected_signals_data[parent][child]
+            signal_name = parent + "/" + child
         except KeyError:
-            return False
+            return False, signal_name
 
-        return True
+        return True, signal_name
 
     def select_item(self, signal_path: list) -> bool:
         """
