@@ -250,15 +250,16 @@ class QuadView(QMainWindow):
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """
-        self.clear_plots()
+        self.clear_graph_view_plots()
         self.textbox_selected_signals.setPlainText("")
         self._view_model.deselect_all_signals()
 
         tree_model = self._view_model.update_tree_model()
         self.tree_view.setModel(tree_model)
 
-    def clear_plots(self):
-        pass
+    def clear_graph_view_plots(self):
+        self.graph_ax.clear()
+        self.graph_plots = {}
 
     def dragEnterEvent(self, event: QDragEnterEvent, /):
         """ This event triggers when a file is being dragged into the main window """
