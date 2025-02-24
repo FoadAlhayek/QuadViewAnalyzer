@@ -10,7 +10,7 @@ from os import access
 from os.path import split
 
 from PySide6.QtWidgets import (QWidget, QLabel, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
-                               QTextEdit)
+                               QTextEdit, QLineEdit)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
@@ -117,6 +117,10 @@ class QuadView(QMainWindow):
         ###################
         #  Other widgets  #
         ###################
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("Search...")
+        self.search_bar.textChanged.connect(self.on_search_text_changed)
+
         self.textbox_selected_signals = QTextEdit()
         self.textbox_selected_signals.setReadOnly(True)
 
@@ -135,6 +139,14 @@ class QuadView(QMainWindow):
         #####################
         self.tree_view.setStyleSheet('''
             QTreeView {
+              font-size: ''' + TREE_FONT_SIZE + ''';
+              background-color: ''' + self.theme.background + ''';
+              color: ''' + self.theme.text + ''';
+            }
+        ''')
+
+        self.search_bar.setStyleSheet('''
+            QLineEdit {
               font-size: ''' + TREE_FONT_SIZE + ''';
               background-color: ''' + self.theme.background + ''';
               color: ''' + self.theme.text + ''';
@@ -164,6 +176,7 @@ class QuadView(QMainWindow):
         # Create the layouts - Order matters! #
         #######################################
         tree_splitter = QSplitter(Qt.Orientation.Vertical)
+        tree_splitter.addWidget(self.search_bar)
         tree_splitter.addWidget(self.tree_view)
         tree_splitter.addWidget(self.textbox_selected_signals)
 
@@ -174,8 +187,9 @@ class QuadView(QMainWindow):
         ##############################
         # Change alignment & spacing #
         ##############################
-        tree_splitter.setStretchFactor(0, 3)  # Tree menu
-        tree_splitter.setStretchFactor(1, 1)  # Selected signal display
+        tree_splitter.setStretchFactor(0, 1)
+        tree_splitter.setStretchFactor(1, 6)  # Tree menu
+        tree_splitter.setStretchFactor(2, 2)  # Selected signal display
 
         splitter.setStretchFactor(0, 2)       # 2x2 plots
         splitter.setStretchFactor(1, 1)       # The complete tree menu with display
@@ -185,6 +199,10 @@ class QuadView(QMainWindow):
         ######################
         main_layout.addWidget(splitter)
         main_layout.addWidget(self.slider)
+
+    def on_search_text_changed(self, search_query):
+        """ Updates the filter of the proxy model based on the search text. """
+        self._view_model.set_filter_text(search_query)
 
     def update_selected_signals_display(self):
         """ Updates the text area to show which signals have been selected. """
@@ -196,7 +214,9 @@ class QuadView(QMainWindow):
 
     def on_tree_item_double_clicked(self, index):
         """ Handles tree menu clicking features """
-        item = self.tree_view.model().itemFromIndex(index)
+        proxy_model = self.tree_view.model()
+        source_index = proxy_model.mapToSource(index)
+        item = proxy_model.sourceModel().itemFromIndex(source_index)
 
         # Ignore parent nodes
         if item.hasChildren():
@@ -231,7 +251,7 @@ class QuadView(QMainWindow):
         self.textbox_selected_signals.setPlainText("")
         self._view_model.deselect_all_signals()
 
-        tree_model = self._view_model.generate_tree_model()
+        tree_model = self._view_model.update_tree_model()
         self.tree_view.setModel(tree_model)
 
     def clear_plots(self):
