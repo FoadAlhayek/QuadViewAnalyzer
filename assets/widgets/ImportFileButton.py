@@ -8,7 +8,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtCore import Signal
 
 # Internal imports
-from .StandardToolButton import StandardToolButton
+from assets.widgets.StandardToolButton import StandardToolButton
 
 class ImportFileButton(StandardToolButton):
     """
