@@ -26,6 +26,26 @@ class QuadModel:
         return loadmat(filepath)
 
     @staticmethod
+    def parse_conf(path: pathlib.Path, sep=";"):
+        if path.suffix != ".conf":
+            return []
+
+        parsed_data = []
+        with open(path, "r", encoding="utf-8") as fid:
+            for row in fid:
+                row = row.strip()
+
+                # Skip empty lines and comments
+                if not row or row.startswith('#'):
+                    continue
+
+                # Split based on sep and handle edge case of removing empty strings (caused by excess of sep)
+                items = [item.strip() for item in row.split(sep)]
+                items = [item for item in items if item.strip()]
+                parsed_data.append(items)
+        return parsed_data
+
+    @staticmethod
     def invalid_signal(path) -> bool:
         """ Function can be expanded in the future """
         return len(path) < 2

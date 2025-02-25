@@ -9,7 +9,8 @@ emits back the result to the View.
 Usage: main.py, QuadView.py
 """
 import pathlib
-from PySide6.QtCore import QObject, Signal, QRegularExpression, QTimer
+from PySide6.QtCore import QObject, Signal, QRegularExpression, QTimer, QAbstractItemModel
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 # Internal imports
 from viewmodel.helpers.tree_menu_search_filter import CustomFilterProxyModel
@@ -17,6 +18,7 @@ from viewmodel.helpers.tree_menu_search_filter import CustomFilterProxyModel
 class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
     signal_new_data_loaded = Signal()   # Signal to notify the View that a new data file is loaded
+    signal_add_plot = Signal(QStandardItem, list)
 
     def __init__(self, model):
         super().__init__()
@@ -25,7 +27,7 @@ class QuadViewModel(QObject):
         self.dat = pathlib.Path("")
         self.loaded_data = {}
         self.selected_signals_data = {}
-        self.accepted_file_types = [".mat", ".dat"]
+        self.accepted_file_types = [".mat", ".dat", ".conf"]
         self._proxy_model = CustomFilterProxyModel()
 
         # Init search filter timer
@@ -77,11 +79,63 @@ class QuadViewModel(QObject):
     def update_video_file(self):
         pass
 
+    def find_tree_item_by_path(self, item_path: list) -> QStandardItem | None:
+        """
+        Traverses the tree model and returns the QStandardItem corresponding to the given hierarchical path.
+
+        :param item_path: List of strings representing the path in the tree, e.g., ["A", "B", "C"]
+        :return: QStandardItem corresponding to the path or None if not found.
+        """
+        tree_model: QStandardItemModel | QAbstractItemModel = self._proxy_model.sourceModel()
+        current_item = tree_model.invisibleRootItem()
+
+        for key in item_path:
+            found = None
+
+            for row in range(current_item.rowCount()):
+                child = current_item.child(row)
+
+                if child.text() == key:
+                    found = child
+                    break
+
+            if found is None:
+                return None
+
+            current_item = found
+        return current_item
+
+    def parse_and_load_conf(self, path: pathlib.Path):
+        """
+        Parses the configuration file, extracts the signals, and updates the view if they exist by emitting the item and
+        item path with the Signal "signal_add_plot".
+
+        :param path: Path to the configuration file.
+        """
+        parsed_conf_data = self._model.parse_conf(path, sep=";")
+
+        for item_path in parsed_conf_data:
+            if self.is_signal_already_selected(item_path):
+                continue
+
+            item_added = self.select_item(item_path)
+            if item_added:
+                item = self.find_tree_item_by_path(item_path)
+
+                # Mismatch between data and tree menu (should not be possible due to item_added)
+                if item is None:
+                    self.deselect_item(item_path)
+                    return
+
+                self.signal_add_plot.emit(item, item_path)
+
     def handle_dropped_files(self, filepaths: list[pathlib.Path]):
         # To prevent loading in multiple files at the same time
         current_mat = pathlib.Path("")
         current_dat = pathlib.Path("")
+        current_conf = pathlib.Path("")
 
+        # Loop over all dropped files and only consider the latest of each file type
         for filepath in filepaths:
             file_ext = filepath.suffix
 
@@ -89,16 +143,19 @@ class QuadViewModel(QObject):
                 current_mat = filepath
             elif file_ext == ".dat":
                 current_dat = filepath
-            else:
-                continue
+            elif file_ext == ".conf":
+                current_conf = filepath
 
-        # Update
+        # Update - important, always parse the .mat file first
         if current_mat.is_file():
             self.set_and_load_mat(current_mat)
 
         if current_dat.is_file():
             self.dat = current_dat
             self.update_video_file()
+
+        if current_conf.is_file():
+            self.parse_and_load_conf(current_conf)
 
     def get_signal_data(self, signal_path) -> tuple[list, list, str]:
         ts = []

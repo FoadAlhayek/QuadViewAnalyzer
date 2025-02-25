@@ -12,7 +12,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
                                QTextEdit, QLineEdit)
-from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel
+from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
 
 # Internal imports
@@ -26,6 +26,7 @@ class QuadView(QMainWindow):
         # Init the ViewModel and connect the signals with a method
         self._view_model = view_model
         self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
+        self._view_model.signal_add_plot.connect(self.add_signal)
 
         ##################
         # Init constants #
@@ -133,8 +134,10 @@ class QuadView(QMainWindow):
         button_normalize_plots = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "normalize.svg")))
         button_normalize_plots.setToolTip("Normalize the plots")
 
-        button_add_custom_signal = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "add_chart.svg")))
-        button_add_custom_signal.setToolTip("Add custom xy-signal")
+        button_add_predefined_signals = c_widgets.ImportFileButton(file_ext_filter="Configuration (*.conf)",
+                                                                   icon=QIcon(str(icons_path / "add_chart.svg")),
+                                                                   caption="Choose configuration file")
+        button_add_predefined_signals.setToolTip("Add predefined signals")
 
         search_bar = QLineEdit()
         search_bar.setPlaceholderText("Search...")
@@ -150,7 +153,7 @@ class QuadView(QMainWindow):
         button_new_mat_data.file_selected.connect(self.set_and_load_new_mat)
         button_clear_plots.clicked.connect(self.reset_ui_workspace)
         #button_normalize_plots.clicked.connect()
-        #button_add_custom_signal.clicked.connect()
+        button_add_predefined_signals.file_selected.connect(self.parse_and_load_conf)
 
         #####################
         # Style the widgets #
@@ -158,7 +161,7 @@ class QuadView(QMainWindow):
         button_new_mat_data.set_size(40,40)
         button_clear_plots.set_size(40, 40)
         button_normalize_plots.set_size(40, 40)
-        button_add_custom_signal.set_size(40, 40)
+        button_add_predefined_signals.set_size(40, 40)
 
         search_bar.setStyleSheet('''
             QLineEdit {
@@ -191,7 +194,7 @@ class QuadView(QMainWindow):
         plot_buttons_layout.addWidget(button_new_mat_data)
         plot_buttons_layout.addWidget(button_clear_plots)
         plot_buttons_layout.addWidget(button_normalize_plots)
-        plot_buttons_layout.addWidget(button_add_custom_signal)
+        plot_buttons_layout.addWidget(button_add_predefined_signals)
         plot_buttons = QWidget()
         plot_buttons.setLayout(plot_buttons_layout)
 
@@ -297,9 +300,9 @@ class QuadView(QMainWindow):
             temp_item = temp_item.parent()
 
         if self._view_model.is_signal_already_selected(item_path):
-            signal_deleted, signal_name = self._view_model.deselect_item(item_path)
+            item_deleted, signal_name = self._view_model.deselect_item(item_path)
 
-            if signal_deleted:
+            if item_deleted:
                 # Remove highlight of item in the tree menu
                 item.setBackground(QColor(self.theme.background))
                 item.setForeground(QColor(self.theme.text))
@@ -307,17 +310,26 @@ class QuadView(QMainWindow):
                 # Remove the deselected signal plot
                 self.graph_ax.removeItem(self.graph_plots[signal_name])
                 del self.graph_plots[signal_name]
+
+                self.update_selected_signals_display()
+                self.set_slider_range()
         else:
-            signal_added = self._view_model.select_item(item_path)
+            item_added = self._view_model.select_item(item_path)
 
-            if signal_added:
-                # Highlight item in the tree menu
-                item.setBackground(QColor(self.theme.highlight))
-                item.setForeground(QColor(self.theme.highlight_text))
+            if item_added:
+                self.add_signal(item, item_path)
 
-                # Add plot
-                ts, val, signal_name = self._view_model.get_signal_data(item_path)
-                self.update_graph(ts, val, signal_name)
+    def parse_and_load_conf(self, path: pathlib.Path):
+        self._view_model.parse_and_load_conf(path)
+
+    def add_signal(self, item: QStandardItem, item_path: list):
+        # Highlight item in the tree menu
+        item.setBackground(QColor(self.theme.highlight))
+        item.setForeground(QColor(self.theme.highlight_text))
+
+        # Add plot
+        ts, val, signal_name = self._view_model.get_signal_data(item_path)
+        self.update_graph(ts, val, signal_name)
 
         self.update_selected_signals_display()
         self.set_slider_range()
