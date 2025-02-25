@@ -6,8 +6,8 @@ The model shall not keep memory of the View state
 
 Usage: main.py, QuadViewModel.py
 """
-import pathlib
 import sys
+import pathlib
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 # Internal imports

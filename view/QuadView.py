@@ -6,14 +6,14 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
+import sys
+import pathlib
+import numpy as np
+import pyqtgraph as pg
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
-                               QTextEdit, QLineEdit, QToolButton)
+                               QTextEdit, QLineEdit)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
-import pyqtgraph as pg
-import pathlib
-import sys
-import numpy as np
 
 # Internal imports
 import assets.widgets as c_widgets
@@ -33,6 +33,7 @@ class QuadView(QMainWindow):
         window_width = int(1200)
         window_height = int(800)
         tree_font_size = "8pt"
+        self.slider_scaling_factor = 100
 
         # Get the path to the folder containing the running script (required for exe to work properly)
         if getattr(sys, 'frozen', False):
@@ -80,6 +81,8 @@ class QuadView(QMainWindow):
         ###################
         self.graph_ax = glw.addPlot(row=0, col=1, title="Graph analysis")
         self.graph_plots = {}
+        self.vline = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen("r", width=1))
+        self.graph_ax.addItem(self.vline)
         legend = self.graph_ax.addLegend(offset=(-10, 10), labelTextColor=self.theme.legend_text)
         legend.setScale(0.8)
 
@@ -101,9 +104,10 @@ class QuadView(QMainWindow):
         ###################
         # SLIDER SETTINGS #
         ###################
-        slider = pg.QtWidgets.QSlider(Qt.Orientation.Horizontal)
-        slider.setRange(0, 1000)
-        slider.setValue(0)
+        self.slider = pg.QtWidgets.QSlider(Qt.Orientation.Horizontal)
+        self.slider.setRange(0, 1)
+        self.slider.setValue(0)
+        self.slider.valueChanged.connect(self.on_slider_change)
 
         ######################
         # TREE MENU SETTINGS #
@@ -215,7 +219,7 @@ class QuadView(QMainWindow):
         # Create main layout #
         ######################
         main_layout.addWidget(splitter)
-        main_layout.addWidget(slider)
+        main_layout.addWidget(self.slider)
 
     def on_search_text_changed(self, search_query):
         """ Updates the filter of the proxy model based on the search text. """
@@ -232,6 +236,36 @@ class QuadView(QMainWindow):
             pen = pg.mkPen(QColor(r, g, b), width=2)
 
             self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
+
+    def on_slider_change(self, value: int):
+        non_scaled_value = value / self.slider_scaling_factor
+        self.vline.setPos(non_scaled_value)
+
+    def set_slider_range(self):
+        """ Sets the slider's range and resets its value based on the x-values of all plotted data. """
+        if self.graph_plots == {}:
+            self.reset_slider()
+            return
+
+        # Compute min
+        x_vals = [item.getData()[0][0] for item in self.graph_plots.values()]
+        current_min = int(min(x_vals))
+
+        # Compute max
+        x_vals = [item.getData()[0][-1] for item in self.graph_plots.values()]
+        current_max = int(np.ceil(max(x_vals)))
+
+        # Scale
+        slider_min = current_min * self.slider_scaling_factor
+        slider_max = current_max * self.slider_scaling_factor
+
+        # Update the slider's range
+        self.slider.setMinimum(slider_min)
+        self.slider.setMaximum(slider_max)
+
+        # Reset the slider value and vertical line to the new min
+        self.slider.setValue(slider_min)
+        self.vline.setPos(current_min)
 
     def update_selected_signals_display(self):
         """ Updates the text area to show which signals have been selected. """
@@ -283,6 +317,7 @@ class QuadView(QMainWindow):
                 self.update_graph(ts, val, signal_name)
 
         self.update_selected_signals_display()
+        self.set_slider_range()
 
     def set_and_load_new_mat(self, path: pathlib.Path):
         self._view_model.set_and_load_mat(path)
@@ -305,6 +340,14 @@ class QuadView(QMainWindow):
     def clear_graph_view_plots(self):
         self.graph_ax.clear()
         self.graph_plots = {}
+        self.graph_ax.addItem(self.vline)
+        self.reset_slider()
+
+    def reset_slider(self):
+        self.slider.setRange(0, 1)
+        self.slider.setValue(0)
+        self.vline.setPos(0)
+        self.vline.setValue(0)
 
     def clear_tree_highlighting(self):
         """ Clears all highlighting from the tree view items. """
