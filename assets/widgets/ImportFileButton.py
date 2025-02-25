@@ -2,7 +2,6 @@
 @Author: Foad Alhayek
 @Description: An alternative custom QToolButton that lets the user pick a file and emits the path.
 """
-import sys
 import pathlib
 from PySide6.QtWidgets import QToolButton, QFileDialog
 from PySide6.QtGui import QIcon
@@ -102,6 +101,7 @@ class ImportFileButton(QToolButton):
 if __name__ == "__main__":
     """ Showcasing the usage of the widget. """
     from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel
+    import sys
 
     app = QApplication(sys.argv)
 
