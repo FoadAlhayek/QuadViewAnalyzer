@@ -123,16 +123,13 @@ class QuadView(QMainWindow):
                                                          caption="Choose MAT-file")
         button_new_mat_data.setToolTip("Load in new mat-file")
 
-        button_clear_plots = QToolButton()
-        button_clear_plots.setIcon(QIcon(str(icons_path / "trash_can.svg")))
+        button_clear_plots = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "trash_can.svg")))
         button_clear_plots.setToolTip("Clear all plots")
 
-        button_normalize_plots = QToolButton()
-        button_normalize_plots.setIcon(QIcon(str(icons_path / "normalize.svg")))
+        button_normalize_plots = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "normalize.svg")))
         button_normalize_plots.setToolTip("Normalize the plots")
 
-        button_add_custom_signal = QToolButton()
-        button_add_custom_signal.setIcon(QIcon(str(icons_path / "add_chart.svg")))
+        button_add_custom_signal = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "add_chart.svg")))
         button_add_custom_signal.setToolTip("Add custom xy-signal")
 
         search_bar = QLineEdit()
@@ -155,6 +152,9 @@ class QuadView(QMainWindow):
         # Style the widgets #
         #####################
         button_new_mat_data.set_size(40,40)
+        button_clear_plots.set_size(40, 40)
+        button_normalize_plots.set_size(40, 40)
+        button_add_custom_signal.set_size(40, 40)
 
         search_bar.setStyleSheet('''
             QLineEdit {
