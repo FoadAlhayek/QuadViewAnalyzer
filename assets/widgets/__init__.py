@@ -2,3 +2,4 @@
 # from .File import Class
 from .TextBoxWithButton import TextBoxWithButton
 from .ImportFileButton import ImportFileButton
+from .StandardToolButton import StandardToolButton
