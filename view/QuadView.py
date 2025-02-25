@@ -6,8 +6,8 @@ The View connects signals from the ViewModel and a function with equal amounts o
 
 Usage: main.py, QuadViewModel.py
 """
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow, QTextEdit,
-                               QLineEdit)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
+                               QTextEdit, QLineEdit, QToolButton)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
 import pyqtgraph as pg
@@ -16,6 +16,7 @@ import sys
 import numpy as np
 
 # Internal imports
+import assets.widgets as c_widgets
 from assets.palettes.Palette import LightTheme, DarkTheme  # noqa
 
 class QuadView(QMainWindow):
@@ -39,6 +40,9 @@ class QuadView(QMainWindow):
         else:
             app_path = pathlib.Path(__file__).parent.parent
 
+        # Handy predefined paths
+        icons_path = pathlib.Path(app_path) / "assets" / "icons"
+
         ###############
         # Init the UI #
         ###############
@@ -51,7 +55,7 @@ class QuadView(QMainWindow):
 
         self.theme = LightTheme()
         self.setWindowTitle("QuadViewAnalyzer")
-        self.setWindowIcon(QIcon(str(pathlib.Path(app_path) / "assets" / "icons" / "gui_logo.ico")))
+        self.setWindowIcon(QIcon(str(icons_path / "gui_logo.ico")))
         self.resize(window_width, window_height)
         self.setStyleSheet(f"background-color: {self.theme.background};")
         self.acceptDrops()
@@ -114,6 +118,23 @@ class QuadView(QMainWindow):
         ###################
         #  Other widgets  #
         ###################
+        button_new_mat_data = c_widgets.ImportFileButton(file_ext_filter="MATLAB MAT-file (*.mat)",
+                                                         icon=QIcon(str(icons_path / "add_sign.svg")),
+                                                         caption="Choose MAT-file")
+        button_new_mat_data.setToolTip("Load in new mat-file")
+
+        button_clear_plots = QToolButton()
+        button_clear_plots.setIcon(QIcon(str(icons_path / "trash_can.svg")))
+        button_clear_plots.setToolTip("Clear all plots")
+
+        button_normalize_plots = QToolButton()
+        button_normalize_plots.setIcon(QIcon(str(icons_path / "normalize.svg")))
+        button_normalize_plots.setToolTip("Normalize the plots")
+
+        button_add_custom_signal = QToolButton()
+        button_add_custom_signal.setIcon(QIcon(str(icons_path / "add_chart.svg")))
+        button_add_custom_signal.setToolTip("Add custom xy-signal")
+
         search_bar = QLineEdit()
         search_bar.setPlaceholderText("Search...")
         search_bar.textChanged.connect(self.on_search_text_changed)
@@ -125,20 +146,26 @@ class QuadView(QMainWindow):
         # Connect with the ViewModel #
         ##############################
         self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
+        button_new_mat_data.file_selected.connect(self.set_and_load_new_mat)
+        #button_clear_plots.clicked.connect()
+        #button_normalize_plots.clicked.connect()
+        #button_add_custom_signal.clicked.connect()
 
         #####################
         # Style the widgets #
         #####################
-        self.tree_view.setStyleSheet('''
-            QTreeView {
+        button_new_mat_data.set_size(40,40)
+
+        search_bar.setStyleSheet('''
+            QLineEdit {
               font-size: ''' + tree_font_size + ''';
               background-color: ''' + self.theme.background + ''';
               color: ''' + self.theme.text + ''';
             }
         ''')
 
-        search_bar.setStyleSheet('''
-            QLineEdit {
+        self.tree_view.setStyleSheet('''
+            QTreeView {
               font-size: ''' + tree_font_size + ''';
               background-color: ''' + self.theme.background + ''';
               color: ''' + self.theme.text + ''';
@@ -156,7 +183,16 @@ class QuadView(QMainWindow):
         #######################################
         # Create the layouts - Order matters! #
         #######################################
+        plot_buttons_layout = QHBoxLayout()
+        plot_buttons_layout.addWidget(button_new_mat_data)
+        plot_buttons_layout.addWidget(button_clear_plots)
+        plot_buttons_layout.addWidget(button_normalize_plots)
+        plot_buttons_layout.addWidget(button_add_custom_signal)
+        plot_buttons = QWidget()
+        plot_buttons.setLayout(plot_buttons_layout)
+
         tree_splitter = QSplitter(Qt.Orientation.Vertical)
+        tree_splitter.addWidget(plot_buttons)
         tree_splitter.addWidget(search_bar)
         tree_splitter.addWidget(self.tree_view)
         tree_splitter.addWidget(self.textbox_selected_signals)
@@ -247,6 +283,9 @@ class QuadView(QMainWindow):
                 self.update_graph(ts, val, signal_name)
 
         self.update_selected_signals_display()
+
+    def set_and_load_new_mat(self, path: pathlib.Path):
+        self._view_model.set_and_load_mat(path)
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """

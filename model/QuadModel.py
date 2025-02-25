@@ -22,7 +22,7 @@ class QuadModel:
             self.app_path = pathlib.Path(__file__).parent.parent
 
     @staticmethod
-    def loadmat(filepath):
+    def load_mat(filepath):
         return loadmat(filepath)
 
     @staticmethod

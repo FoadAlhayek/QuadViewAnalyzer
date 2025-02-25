@@ -34,10 +34,15 @@ class QuadViewModel(QObject):
         self.search_timer.timeout.connect(self.apply_filter)
         self.latest_search_text = ""
 
-    def set_mat(self, path: pathlib.Path):
+    def set_and_load_mat(self, path: pathlib.Path):
         """ Stores the path of the selected file. """
         if path.suffix == ".mat":
             self.mat = path
+            self.loaded_data = self._model.load_mat(self.mat)
+            self.signal_new_data_loaded.emit()
+
+    def reload_mat(self):
+        self.loaded_data = self._model.load_mat(self.mat)
 
     def update_tree_model(self):
         """ Regenerate the tree model from the loaded data and update the proxy model. """
@@ -63,15 +68,8 @@ class QuadViewModel(QObject):
         regex.setPatternOptions(QRegularExpression.PatternOption.CaseInsensitiveOption)
         self._proxy_model.setFilterRegularExpression(regex)
 
-    def loadmat(self):
-        self.loaded_data = self._model.loadmat(self.mat)
-
     def deselect_all_signals(self):
         self.selected_signals_data = {}
-
-    def update_data_file(self):
-        self.loadmat()
-        self.signal_new_data_loaded.emit()
 
     def update_video_file(self):
         pass
@@ -93,8 +91,7 @@ class QuadViewModel(QObject):
 
         # Update
         if current_mat.is_file():
-            self.mat = current_mat
-            self.update_data_file()
+            self.set_and_load_mat(current_mat)
 
         if current_dat.is_file():
             self.dat = current_dat
