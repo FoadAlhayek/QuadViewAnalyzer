@@ -1,16 +1,19 @@
 """
 @Author: Foad Alhayek
-@Description: An alternative custom QToolButton that lets the user pick a file and emits the path.
+@Description: A StandardToolButton that handles the logic of a user picking a file and emits the path.
 """
 import pathlib
-from PySide6.QtWidgets import QToolButton, QFileDialog
+from PySide6.QtWidgets import QFileDialog
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import QSize, Signal
+from PySide6.QtCore import Signal
 
+# Internal imports
+from .StandardToolButton import StandardToolButton
 
-class ImportFileButton(QToolButton):
+class ImportFileButton(StandardToolButton):
     """
     A custom tool button that opens a file dialog when clicked.
+    Inherits styling from another custom widget StandardToolButton.
 
     Attributes:
         file_selected (Signal): Emitted when a file is selected.
@@ -31,7 +34,7 @@ class ImportFileButton(QToolButton):
         :param initial_dir: Initial directory of the file dialog.
         :param parent: Parent widget of the button.
         """
-        super().__init__(parent)
+        super().__init__(icon, parent)
 
         # Init class settings
         self.file_ext_filter = file_ext_filter
@@ -40,47 +43,6 @@ class ImportFileButton(QToolButton):
 
         # Connect button to file explorer
         self.clicked.connect(self.open_file_dialog)
-
-        # Style
-        self.setIcon(icon)
-        self.setStyleSheet('''
-            QToolButton {
-              padding: 0px;
-              border-width: 1px;
-              border-style: solid;
-              border-color: black;
-              border-radius: 6px;
-              background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6f7fa, stop: 1 #d3d3d3);
-            }
-            QToolButton:pressed {
-              background: #e1e1e1;
-            }
-        ''')
-
-    def set_size(self, width, height):
-        """ Updates the size of the widget by making sure the widget and icon are proportional and animation works """
-        self.setFixedSize(width, height)
-        self.setIconSize(QSize(height//2, height//2))
-
-        stylesheet = '''
-        QToolButton {
-          padding: 0px;
-          border-width: 1px;
-          border-style: solid;
-          border-color: black;
-          border-radius: 6px;
-          background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 #f6f7fa, stop: 1 #d3d3d3);
-        }
-        QToolButton:pressed {
-          background: #e1e1e1;
-          padding:''' + str(height//4) + '''px;
-        }
-        '''
-
-        self.setStyleSheet(stylesheet)
-
-        # Update the changes
-        self.adjustSize()
 
     def open_file_dialog(self):
         """ Opens the file dialog when the button is clicked and emits with the selected file path. """
