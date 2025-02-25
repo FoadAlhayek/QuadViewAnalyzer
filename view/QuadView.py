@@ -242,7 +242,10 @@ class QuadView(QMainWindow):
         self.vline.setPos(non_scaled_value)
 
     def set_slider_range(self):
-        """ Sets the slider's range and resets its value based on the x-values of all plotted data. """
+        """
+        Adjusts the slider's range and resets its value according to the x-values of all plotted data, assuming that
+        the x-values are increasing and in ascending order.
+        """
         if self.graph_plots == {}:
             self.reset_slider()
             return
