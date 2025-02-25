@@ -34,6 +34,9 @@ class QuadViewModel(QObject):
         self.search_timer.timeout.connect(self.apply_filter)
         self.latest_search_text = ""
 
+    def is_mat_loaded(self) -> bool:
+        return self.mat.suffix == ".mat" and self.loaded_data != {}
+
     def set_and_load_mat(self, path: pathlib.Path):
         """ Stores the path of the selected file. """
         if path.suffix == ".mat":

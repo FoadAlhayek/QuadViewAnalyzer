@@ -144,7 +144,7 @@ class QuadView(QMainWindow):
         ##############################
         self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
         button_new_mat_data.file_selected.connect(self.set_and_load_new_mat)
-        #button_clear_plots.clicked.connect()
+        button_clear_plots.clicked.connect(self.reset_ui_workspace)
         #button_normalize_plots.clicked.connect()
         #button_add_custom_signal.clicked.connect()
 
@@ -289,16 +289,48 @@ class QuadView(QMainWindow):
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """
-        self.clear_graph_view_plots()
-        self.textbox_selected_signals.setPlainText("")
-        self._view_model.deselect_all_signals()
+        self.reset_ui_workspace()
 
         tree_model = self._view_model.update_tree_model()
         self.tree_view.setModel(tree_model)
 
+    def reset_ui_workspace(self):
+        """ Function that clears all user UI related actions while keeping imported data intact. """
+        if self._view_model.is_mat_loaded():
+            self.clear_graph_view_plots()
+            self.clear_tree_highlighting()
+            self.textbox_selected_signals.setPlainText("")
+            self._view_model.deselect_all_signals()
+
     def clear_graph_view_plots(self):
         self.graph_ax.clear()
         self.graph_plots = {}
+
+    def clear_tree_highlighting(self):
+        """ Clears all highlighting from the tree view items. """
+        model = self.tree_view.model()
+        if not model:
+            return
+
+        # If using a proxy model, get the source model
+        if hasattr(model, "sourceModel"):
+            model = model.sourceModel()
+
+        # Start with the invisible root item
+        root = model.invisibleRootItem()
+        stack = [root]
+
+        # Reset the item's background and foreground to the default theme
+        while stack:
+            item = stack.pop()
+            item.setBackground(QColor(self.theme.background))
+            item.setForeground(QColor(self.theme.text))
+
+            # Push all children of this item onto the stack
+            for row in range(item.rowCount()):
+                child = item.child(row)
+                if child is not None:
+                    stack.append(child)
 
     def dragEnterEvent(self, event: QDragEnterEvent, /):
         """ This event triggers when a file is being dragged into the main window """
