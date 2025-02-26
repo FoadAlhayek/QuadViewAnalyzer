@@ -8,6 +8,7 @@ Usage: main.py, QuadViewModel.py
 """
 import sys
 import pathlib
+import numpy as np
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 # Internal imports
@@ -73,6 +74,55 @@ class QuadModel:
                     if isinstance(value, dict):
                         stack.append((key_item, value))
         return model
+
+    @staticmethod
+    def isinstance_sequence(arr):
+        """ Helper function to determine if the variable is a sequence/list. """
+        return isinstance(arr, (list, tuple, np.ndarray))
+
+    def min_dict_value(self, data: dict, keys: list[str]) -> float | None:
+        """
+        Finds the minimum value from a nested dictionary for any of the specified keys.
+        The values must be either a single numeric value or a 1D array-like sequence.
+        This function does not support multidimensional arrays.
+
+        :param data: A (nested) dictionary containing 1D array data.
+        :param keys: A list of keys to search for.
+        :return: The smallest numeric value found, or None if no valid candidate is found.
+        """
+        min_val: float | None = None
+        keys = set(keys)
+        is_seq = self.isinstance_sequence # Cache locally, optimization
+        stack = [data]
+
+        while stack:
+            current = stack.pop()
+
+            if isinstance(current, dict):
+                for key, val in current.items():
+                    if key in keys:
+                        if is_seq(val) and len(val) > 0:
+                            candidate = val[0]
+                        else:
+                            candidate = val
+                        try:
+                            candidate = float(candidate)
+                        except (TypeError, ValueError):
+                            continue
+                        if min_val is None or candidate < min_val:
+                            min_val = candidate
+
+                    # Add nested dictionaries to the stack
+                    if isinstance(val, dict):
+                        stack.append(val)
+                    elif is_seq(val):
+                        # Extend the stack with any dicts found in the list
+                        stack.extend([item for item in val if isinstance(item, dict)])
+            elif is_seq(current):
+                stack.extend([item for item in current if isinstance(item, dict)])
+
+        return min_val
+
 
 if __name__ == '__main__':
     pass

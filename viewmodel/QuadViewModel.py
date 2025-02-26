@@ -29,6 +29,7 @@ class QuadViewModel(QObject):
         self.selected_signals_data = {}
         self.accepted_file_types = [".mat", ".dat", ".conf"]
         self._proxy_model = CustomFilterProxyModel()
+        self.global_ts_ref = None
 
         # Init search filter timer
         self.search_timer = QTimer()
@@ -40,20 +41,27 @@ class QuadViewModel(QObject):
         return self.mat.suffix == ".mat" and self.loaded_data != {}
 
     def set_and_load_mat(self, path: pathlib.Path):
-        """ Stores the path of the selected file. """
+        """ Only function that handles loading in the .mat data into the backend-memory. """
         if path.suffix == ".mat":
             self.mat = path
             self.loaded_data = self._model.load_mat(self.mat)
+            self.global_ts_ref = self._model.min_dict_value(self.loaded_data, ["TimestampLogfile"])
             self.signal_new_data_loaded.emit()
-
-    def reload_mat(self):
-        self.loaded_data = self._model.load_mat(self.mat)
 
     def update_tree_model(self):
         """ Regenerate the tree model from the loaded data and update the proxy model. """
         tree_model = self._model.generate_tree_model(self.loaded_data)
         self._proxy_model.setSourceModel(tree_model)
         return self._proxy_model
+
+    def update_global_ts_ref(self, ts):
+        self.global_ts_ref = ts
+        # get all current signals and readd them with new ts if not added remove as something went wrong
+        # The View should delete the signals and this should only update the ts data and the view should readd them again probably with the update_graph function!
+        # This could probably send back what the update graph needs and it can loop it over.
+        # self.select_item()
+        # self.deselect_all_signals
+
 
     def set_filter_text(self, text: str):
         """
@@ -197,6 +205,9 @@ class QuadViewModel(QObject):
     def deselect_item(self, signal_path: list) -> tuple[bool, str]:
         """
         Deselects the signal, see select_item() for more information.
+
+        This is the only function that handles deleting chosen item data from the backend-memory.
+
         :param signal_path: An array where each element is a key in a dict
         :return: Bool if the signal was removed and the signal name that was deleted
         """
@@ -208,8 +219,8 @@ class QuadViewModel(QObject):
         child = signal_path[-1]
 
         try:
-            # Delete the entire parent dict if only the ts and child key exists, otherwise delete the child only
-            if len(self.selected_signals_data[parent]) <= 2:
+            # Delete the entire parent dict if only the ts, ts_raw and child key exists, otherwise delete the child only
+            if len(self.selected_signals_data[parent]) <= 3:
                 del self.selected_signals_data[parent]
             else:
                 del self.selected_signals_data[parent][child]
@@ -223,6 +234,8 @@ class QuadViewModel(QObject):
         """
         Stores user-picked signals in a dict with their corresponding timestamp.
         Dict format: {parent1: {ts, child1, child2}, parent2: {ts, child1}}
+
+        This is the only function that handles adding chosen item data to the backend-memory.
 
         NOTE: The function does not consider if the same parent-child exists in a different grandparent, e.g.,
         grandparent1-parent1-child1 and grandparent2-parent1-child1, the grandparent2's parent-child will override the
@@ -246,7 +259,15 @@ class QuadViewModel(QObject):
 
             # No need to store the same ts
             if parent not in self.selected_signals_data:
-                self.selected_signals_data[parent] = {"ts": temp_data.get("TimestampLogfile", [])}
+                ts = temp_data.get("TimestampLogfile").copy()
+
+                # Adjust the timestamp based on global ts reference
+                if self.global_ts_ref is not None and self.global_ts_ref != 0:
+                    ts -= self.global_ts_ref
+
+                # Add modified ts and original
+                self.selected_signals_data[parent] = {"ts": ts}
+                self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
 
         signal_key = signal_path[-1]
         if not parent:

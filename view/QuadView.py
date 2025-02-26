@@ -274,7 +274,8 @@ class QuadView(QMainWindow):
         """ Updates the text area to show which signals have been selected. """
         selected = self._view_model.selected_signals_data
         display_lines = [
-            f"• {parent}: {', '.join(key for key in signals if key != 'ts')}" for parent, signals in selected.items()
+            f"• {parent}: {', '.join(key for key in signals if key != 'ts' or key !='ts_raw')}"
+            for parent, signals in selected.items()
         ]
         self.textbox_selected_signals.setPlainText("\n".join(display_lines))
 
