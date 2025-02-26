@@ -18,6 +18,7 @@ from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
 # Internal imports
 import assets.widgets as c_widgets
 from assets.palettes.Palette import LightTheme, DarkTheme  # noqa
+from assets.palettes.Colormap import Colormap
 
 class QuadView(QMainWindow):
     def __init__(self, view_model):
@@ -35,6 +36,7 @@ class QuadView(QMainWindow):
         window_height = int(800)
         tree_font_size = "8pt"
         self.slider_scaling_factor = 100
+        self.cm = Colormap("fof20")
 
         # Get the path to the folder containing the running script (required for exe to work properly)
         if getattr(sys, 'frozen', False):
@@ -232,12 +234,7 @@ class QuadView(QMainWindow):
         if signal_name in self.graph_plots:
             self.graph_plots[signal_name].setData(x, y)
         else:
-            rgb_colors =  np.random.randint(0, 256, 3)
-            if not np.any(rgb_colors >= 220):
-                rgb_colors[np.random.randint(0, 3)] = np.random.randint(220, 256)
-            r, g, b = rgb_colors.tolist() # To resolve linting issue
-            pen = pg.mkPen(QColor(r, g, b), width=2)
-
+            pen = pg.mkPen(self.cm.get_color(item_id=signal_name), width=2)
             self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
 
     def on_slider_change(self, value: int):
@@ -311,6 +308,8 @@ class QuadView(QMainWindow):
                 self.graph_ax.removeItem(self.graph_plots[signal_name])
                 del self.graph_plots[signal_name]
 
+                # Update colormap, display, and slider
+                self.cm.release_color(signal_name)
                 self.update_selected_signals_display()
                 self.set_slider_range()
         else:
@@ -351,6 +350,7 @@ class QuadView(QMainWindow):
             self.clear_tree_highlighting()
             self.textbox_selected_signals.setPlainText("")
             self._view_model.deselect_all_signals()
+            self.cm.reset()
 
     def clear_graph_view_plots(self):
         self.graph_ax.clear()
