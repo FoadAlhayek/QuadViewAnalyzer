@@ -3,3 +3,4 @@
 from .TextBoxWithButton import TextBoxWithButton
 from .ImportFileButton import ImportFileButton
 from .StandardToolButton import StandardToolButton
+from .FloatInputWidget import FloatInputWidget
