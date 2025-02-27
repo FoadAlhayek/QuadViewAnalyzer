@@ -28,6 +28,8 @@ class QuadView(QMainWindow):
         self._view_model = view_model
         self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
         self._view_model.signal_add_plot.connect(self.add_signal)
+        self._view_model.signal_chosen_item_data_updated.connect(self.update_all_plots)
+        self._view_model.signal_update_ts_bar_placeholder.connect(self.update_ts_bar_placeholder_text)
 
         ##################
         # Init constants #
@@ -134,16 +136,21 @@ class QuadView(QMainWindow):
         button_clear_plots.setToolTip("Clear all plots")
 
         button_normalize_plots = c_widgets.StandardToolButton(icon=QIcon(str(icons_path / "normalize.svg")))
-        button_normalize_plots.setToolTip("Normalize the plots")
+        button_normalize_plots.setToolTip("NOT IN USE ATM: Normalize the plots")
 
         button_add_predefined_signals = c_widgets.ImportFileButton(file_ext_filter="Configuration (*.conf)",
                                                                    icon=QIcon(str(icons_path / "add_chart.svg")),
                                                                    caption="Choose configuration file")
         button_add_predefined_signals.setToolTip("Add predefined signals")
 
+        self.global_ts_ref_bar = c_widgets.FloatInputWidget(icon=QIcon(str(icons_path / "restart.svg")),
+                                                            placeholder_text="Reference timestamp")
+        self.global_ts_ref_bar.button.setToolTip("Reset ts back to original")
+
         search_bar = QLineEdit()
         search_bar.setPlaceholderText("Search...")
         search_bar.textChanged.connect(self.on_search_text_changed)
+        search_bar.addAction(QIcon(str(icons_path / "search.svg")), QLineEdit.ActionPosition.TrailingPosition)
 
         self.textbox_selected_signals = QTextEdit()
         self.textbox_selected_signals.setReadOnly(True)
@@ -156,6 +163,8 @@ class QuadView(QMainWindow):
         button_clear_plots.clicked.connect(self.reset_ui_workspace)
         #button_normalize_plots.clicked.connect()
         button_add_predefined_signals.file_selected.connect(self.parse_and_load_conf)
+        self.global_ts_ref_bar.value_submitted.connect(self.on_global_ts_ref_submit)
+        self.global_ts_ref_bar.button_clicked.connect(self.reset_global_ts_ref)
 
         #####################
         # Style the widgets #
@@ -164,6 +173,20 @@ class QuadView(QMainWindow):
         button_clear_plots.set_size(40, 40)
         button_normalize_plots.set_size(40, 40)
         button_add_predefined_signals.set_size(40, 40)
+
+        self.global_ts_ref_bar.setStyleSheet('''
+            FloatInputWidget QLineEdit {
+              font-size: ''' + tree_font_size + ''';
+              background-color: ''' + self.theme.background + ''';
+              color: ''' + self.theme.text + ''';
+            }
+            QLineEdit:hover {
+              background-color: #e8e8e8;
+            }
+            QLineEdit:focus {
+              background-color: #ffffff;
+            }
+        ''')
 
         search_bar.setStyleSheet('''
             QLineEdit {
@@ -202,6 +225,7 @@ class QuadView(QMainWindow):
 
         tree_splitter = QSplitter(Qt.Orientation.Vertical)
         tree_splitter.addWidget(plot_buttons)
+        tree_splitter.addWidget(self.global_ts_ref_bar)
         tree_splitter.addWidget(search_bar)
         tree_splitter.addWidget(self.tree_view)
         tree_splitter.addWidget(self.textbox_selected_signals)
@@ -213,9 +237,11 @@ class QuadView(QMainWindow):
         ##############################
         # Change alignment & spacing #
         ##############################
-        tree_splitter.setStretchFactor(0, 1)  # Search bar
-        tree_splitter.setStretchFactor(1, 6)  # Tree menu
-        tree_splitter.setStretchFactor(2, 2)  # Selected signal display
+        tree_splitter.setStretchFactor(0, 1)  # Buttons
+        tree_splitter.setStretchFactor(1, 1)  # Timestamp bar
+        tree_splitter.setStretchFactor(2, 1)  # Search bar
+        tree_splitter.setStretchFactor(3, 6)  # Tree menu
+        tree_splitter.setStretchFactor(4, 3)  # Selected signal display
 
         splitter.setStretchFactor(0, 2)       # 2x2 plots
         splitter.setStretchFactor(1, 1)       # The complete tree menu with display
@@ -226,11 +252,46 @@ class QuadView(QMainWindow):
         main_layout.addWidget(splitter)
         main_layout.addWidget(self.slider)
 
+    def update_ts_bar_placeholder_text(self):
+        self.global_ts_ref_bar.set_placeholder_text(self._view_model.get_current_ts_placeholder_text())
+        self.soft_reset_slider()
+
+    def reset_global_ts_ref(self):
+        """ Resets the timestamp to the most optimal value derived from the loaded data. """
+        ts_reset = self._view_model.reset_global_ts_ref()
+        if ts_reset:
+            self.update_ts_bar_placeholder_text()
+
+    def on_global_ts_ref_submit(self, value: float):
+        """ Updates the graph based on the new inputted ts (offset) and updates the placeholder text to reflect it. """
+        valid_ts = self._view_model.update_global_ts_ref(value)
+        if valid_ts:
+            self.update_ts_bar_placeholder_text()
+
     def on_search_text_changed(self, search_query):
         """ Updates the filter of the proxy model based on the search text. """
         self._view_model.set_filter_text(search_query)
 
-    def update_graph(self, x: list, y: list, signal_name: str):
+    def update_all_plots(self) -> None:
+        """ Re-plots all plots that are in memory. Used when ref ts is changed. """
+        for parent, keys in self._view_model.selected_signals_data.items():
+            ts = keys["ts"]
+
+            for child, item in keys.items():
+                if child in ["ts", "ts_raw"]:
+                    continue
+                signal_name = f"{parent}/{child}"
+                self.update_graph(ts, item, signal_name)
+
+    def update_graph(self, x: list, y: list, signal_name: str) -> None:
+        """
+        Updates the graph by updating an existing plot or adding a new plot to the graph view.
+        See get_signal_data() in view to see how the signal_name is named -> "parent/child".
+
+        :param x: List of x-axis data points.
+        :param y: List of y-axis data points.
+        :param signal_name: Name of the signal to plot. Here it follows the "parent/child" naming convention.
+        """
         if signal_name in self.graph_plots:
             self.graph_plots[signal_name].setData(x, y)
         else:
@@ -247,7 +308,7 @@ class QuadView(QMainWindow):
         the x-values are increasing and in ascending order.
         """
         if self.graph_plots == {}:
-            self.reset_slider()
+            self.hard_reset_slider()
             return
 
         # Compute min
@@ -274,7 +335,7 @@ class QuadView(QMainWindow):
         """ Updates the text area to show which signals have been selected. """
         selected = self._view_model.selected_signals_data
         display_lines = [
-            f"• {parent}: {', '.join(key for key in signals if key != 'ts' or key !='ts_raw')}"
+            f"• {parent}: {', '.join(key for key in signals if key != 'ts' and key !='ts_raw')}"
             for parent, signals in selected.items()
         ]
         self.textbox_selected_signals.setPlainText("\n".join(display_lines))
@@ -352,15 +413,21 @@ class QuadView(QMainWindow):
             self.textbox_selected_signals.setPlainText("")
             self._view_model.deselect_all_signals()
             self.cm.reset()
+            self.global_ts_ref_bar.set_placeholder_text(self._view_model.get_current_ts_placeholder_text())
 
     def clear_graph_view_plots(self):
         self.graph_ax.clear()
         self.graph_plots = {}
         self.graph_ax.addItem(self.vline)
-        self.reset_slider()
+        self.hard_reset_slider()
 
-    def reset_slider(self):
+    def hard_reset_slider(self):
         self.slider.setRange(0, 1)
+        self.slider.setValue(0)
+        self.vline.setPos(0)
+        self.vline.setValue(0)
+
+    def soft_reset_slider(self):
         self.slider.setValue(0)
         self.vline.setPos(0)
         self.vline.setValue(0)

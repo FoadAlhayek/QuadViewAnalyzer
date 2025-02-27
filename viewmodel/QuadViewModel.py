@@ -17,8 +17,10 @@ from viewmodel.helpers.tree_menu_search_filter import CustomFilterProxyModel
 
 class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
-    signal_new_data_loaded = Signal()   # Signal to notify the View that a new data file is loaded
-    signal_add_plot = Signal(QStandardItem, list)
+    signal_new_data_loaded = Signal()                     # Notifies the View that a new data file is loaded
+    signal_add_plot = Signal(QStandardItem, list)  # Notifies the View to plot a newly added item
+    signal_chosen_item_data_updated = Signal()            # Notifies the View that the chosen item data is updated
+    signal_update_ts_bar_placeholder = Signal()           # Notifies the View to update the placeholder text in ts bar
 
     def __init__(self, model):
         super().__init__()
@@ -30,12 +32,21 @@ class QuadViewModel(QObject):
         self.accepted_file_types = [".mat", ".dat", ".conf"]
         self._proxy_model = CustomFilterProxyModel()
         self.global_ts_ref = None
+        self.loaded_ts_ref = None
 
         # Init search filter timer
         self.search_timer = QTimer()
         self.search_timer.setSingleShot(True)
         self.search_timer.timeout.connect(self.apply_filter)
         self.latest_search_text = ""
+
+    def get_current_ts_placeholder_text(self):
+        """ Helper function to return concise f-string for the placeholder text. """
+        return f"Reference ts: {self.global_ts_ref}"
+
+    def reset_global_ts_ref(self) -> bool:
+        """ Resets the timestamp to the most optimal value derived from the loaded data. """
+        return self.update_global_ts_ref(self.loaded_ts_ref)
 
     def is_mat_loaded(self) -> bool:
         return self.mat.suffix == ".mat" and self.loaded_data != {}
@@ -45,7 +56,8 @@ class QuadViewModel(QObject):
         if path.suffix == ".mat":
             self.mat = path
             self.loaded_data = self._model.load_mat(self.mat)
-            self.global_ts_ref = self._model.min_dict_value(self.loaded_data, ["TimestampLogfile"])
+            self.loaded_ts_ref = self._model.min_dict_value(self.loaded_data, ["TimestampLogfile"])
+            self.global_ts_ref = self.loaded_ts_ref
             self.signal_new_data_loaded.emit()
 
     def update_tree_model(self):
@@ -54,14 +66,32 @@ class QuadViewModel(QObject):
         self._proxy_model.setSourceModel(tree_model)
         return self._proxy_model
 
-    def update_global_ts_ref(self, ts):
-        self.global_ts_ref = ts
-        # get all current signals and readd them with new ts if not added remove as something went wrong
-        # The View should delete the signals and this should only update the ts data and the view should readd them again probably with the update_graph function!
-        # This could probably send back what the update graph needs and it can loop it over.
-        # self.select_item()
-        # self.deselect_all_signals
+    def update_global_ts_ref(self, ts: float) -> bool:
+        try:
+            ts = float(ts)
+        except (ValueError, TypeError):
+            return False
 
+        # TODO: Allow ts == 0 now until the ts_raw can be plotted, so one can seamlessly switch between ts and ts_raw
+        if self.global_ts_ref == ts:
+            return False
+
+        if not self.is_mat_loaded():
+            return False
+
+        # Update and recompute ts in memory
+        self.global_ts_ref = ts
+
+        if self.selected_signals_data == {}:
+            self.signal_update_ts_bar_placeholder.emit()
+            return False
+
+        for item in self.selected_signals_data.values():
+            item["ts"] = item["ts_raw"] - self.global_ts_ref
+
+        # Notify the View the memory has been updated
+        self.signal_chosen_item_data_updated.emit()
+        return True
 
     def set_filter_text(self, text: str):
         """
@@ -165,22 +195,27 @@ class QuadViewModel(QObject):
         if current_conf.is_file():
             self.parse_and_load_conf(current_conf)
 
-    def get_signal_data(self, signal_path) -> tuple[list, list, str]:
+    def get_signal_data(self, item_path) -> tuple[list, list, str]:
+        """
+        Retrieves the timestamp, values, and signal name from the backend-memory.
+        :param item_path: List of strings representing the path in either the tree or "parent/child" in memory.
+        :return: A tuple containing the timestamps, values, and signal name.
+        """
         ts = []
         val = []
         signal_name = ""
 
-        if self._model.invalid_signal(signal_path):
+        if self._model.invalid_signal(item_path):
             return ts, val, signal_name
 
-        parent = signal_path[-2]
-        child = signal_path[-1]
+        parent = item_path[-2]
+        child = item_path[-1]
 
         if parent in self.selected_signals_data:
             if child in self.selected_signals_data[parent]:
                 ts = self.selected_signals_data[parent]["ts"]
                 val = self.selected_signals_data[parent][child]
-                signal_name = parent + "/" + child
+                signal_name = f"{parent}/{child}"
 
         return ts, val, signal_name
 
@@ -224,7 +259,7 @@ class QuadViewModel(QObject):
                 del self.selected_signals_data[parent]
             else:
                 del self.selected_signals_data[parent][child]
-            signal_name = parent + "/" + child
+            signal_name = f"{parent}/{child}"
         except KeyError:
             return False, signal_name
 
