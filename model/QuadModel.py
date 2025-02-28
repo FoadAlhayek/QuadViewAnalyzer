@@ -160,7 +160,7 @@ class QuadModel:
             func_name, func = candidate
 
             try:
-                # Deepcopy because we can't trust the functions to prevent unintentional data modification
+                # Deepcopy because we can't trust that the functions do not accidentally modify the original data
                 temp_data = copy.deepcopy(data)
                 result = func(temp_data)
             except Exception as e:
