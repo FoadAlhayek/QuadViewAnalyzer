@@ -6,11 +6,12 @@ The model shall not keep memory of the View state
 
 Usage: main.py, QuadViewModel.py
 """
-import importlib.util
 import sys
 import pathlib
 import numpy as np
+import copy
 import inspect
+import importlib.util
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
 # Internal imports
@@ -153,13 +154,15 @@ class QuadModel:
         if not candidates:
             return {}
 
-        # Loop and run all potential functions
+        # Init
         custom_items = {}
         for candidate in candidates:
             func_name, func = candidate
 
             try:
-                result = func(data)
+                # Deepcopy because we can't trust the functions to prevent unintentional data modification
+                temp_data = copy.deepcopy(data)
+                result = func(temp_data)
             except Exception as e:
                 print(f"\033[91mCould not parse {func_name} in file {filepath} due to {type(e).__name__}: {e}\033[0m")
                 continue
@@ -169,6 +172,9 @@ class QuadModel:
                 continue
 
             x, y = result
+            if len(x) == 0 or len(y) == []:
+                continue
+
             custom_items[func_name] = {}
             custom_items[func_name]["x"] = x
             custom_items[func_name]["y"] = y
