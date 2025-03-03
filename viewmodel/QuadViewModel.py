@@ -181,10 +181,10 @@ class QuadViewModel(QObject):
                 self.signal_add_plot.emit(item, item_path)
 
     def handle_dropped_files(self, filepaths: list[pathlib.Path]):
-        # To prevent loading in multiple files at the same time
+        # To prevent loading in multiple mat files at the same time
         current_mat = pathlib.Path("")
         current_dat = pathlib.Path("")
-        current_conf = pathlib.Path("")
+        config_files = []
         pyfiles = []
 
         # Loop over all dropped files and only consider the latest of each file type
@@ -196,9 +196,9 @@ class QuadViewModel(QObject):
             elif file_ext == ".dat":
                 current_dat = filepath
             elif file_ext == ".conf":
-                current_conf = filepath
+                config_files.append(filepath)
             elif file_ext == ".py":
-                pyfiles.append(pathlib.Path(filepath))
+                pyfiles.append(filepath)
 
         # Update - important, always parse the .mat file first
         if current_mat.is_file():
@@ -216,8 +216,9 @@ class QuadViewModel(QObject):
                     print(f"\033[91mCould not parse {pyfile} due to {type(e).__name__}: {e}\033[0m")
                     continue
 
-        if current_conf.is_file():
-            self.parse_and_load_conf(current_conf)
+        if config_files:
+            for conf in config_files:
+                self.parse_and_load_conf(conf)
 
     def get_signal_data(self, item_path) -> tuple[list, list, str]:
         """
@@ -318,6 +319,9 @@ class QuadViewModel(QObject):
         # Traverse up to the second-last key
         for key in signal_path[:-1]:
             temp_data = temp_data.get(key, {})
+
+        if temp_data == {}:
+            return False
 
         if "TimestampLogfile" in temp_data:
             parent = signal_path[-2]
