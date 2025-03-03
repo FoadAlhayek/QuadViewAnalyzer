@@ -127,7 +127,7 @@ class QuadModel:
         return min_val
 
     @staticmethod
-    def import_custom_data_points(filepath: pathlib.Path, data: dict):
+    def import_custom_data_points(filepath: pathlib.Path, data: dict) -> dict:
         """
         Loads a Python module and searches for functions that takes one argument (the data) and returns a tuple (x, y).
         If found, its results are stored in a dictionary with the parent key as func name and children "x" and "y".

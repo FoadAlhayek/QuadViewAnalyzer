@@ -30,6 +30,7 @@ class QuadView(QMainWindow):
         self._view_model.signal_add_plot.connect(self.add_signal)
         self._view_model.signal_chosen_item_data_updated.connect(self.update_all_plots)
         self._view_model.signal_update_ts_bar_placeholder.connect(self.update_ts_bar_placeholder_text)
+        self._view_model.signal_data_addition.connect(self.on_data_addition)
 
         ##################
         # Init constants #
@@ -397,6 +398,42 @@ class QuadView(QMainWindow):
 
     def set_and_load_new_mat(self, path: pathlib.Path):
         self._view_model.set_and_load_mat(path)
+
+    def on_data_addition(self, parent_key: str, child_keys: list):
+        """ Function to visually add a new item in the tree menu and make it searchable. """
+        model = self.tree_view.model()
+        if not model:
+            return
+
+        # If using a proxy model, get the source model
+        if hasattr(model, "sourceModel"):
+            model = model.sourceModel()
+
+        # Find the parent tree item (traverse backwards as it is most likely new additions are at the end)
+        parent_item = None
+        for row in range(model.rowCount()-1, -1, -1):
+            item = model.item(row)
+
+            if item.text() == parent_key:
+                parent_item = item
+                break
+
+        # Create if parent key does not exist
+        if parent_item is None:
+            parent_item = QStandardItem(parent_key)
+            model.appendRow(parent_item)
+
+        # Create a set of existing child texts for faster lookup
+        existing_children = set()
+        for row in range(parent_item.rowCount()):
+            existing_item = parent_item.child(row)
+            existing_children.add(existing_item.text())
+
+        # Add the new data
+        for child in child_keys:
+            if child not in existing_children:
+                child_item = QStandardItem(child)
+                parent_item.appendRow(child_item)
 
     def on_data_file_load(self):
         """ Called when a new file is loaded. Clears and refreshes the main window. """

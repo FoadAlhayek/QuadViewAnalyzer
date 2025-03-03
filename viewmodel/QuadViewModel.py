@@ -21,6 +21,7 @@ class QuadViewModel(QObject):
     signal_add_plot = Signal(QStandardItem, list)  # Notifies the View to plot a newly added item
     signal_chosen_item_data_updated = Signal()            # Notifies the View that the chosen item data is updated
     signal_update_ts_bar_placeholder = Signal()           # Notifies the View to update the placeholder text in ts bar
+    signal_data_addition = Signal(str, list)
 
     def __init__(self, model):
         super().__init__()
@@ -29,7 +30,7 @@ class QuadViewModel(QObject):
         self.dat = pathlib.Path("")
         self.loaded_data = {}
         self.selected_signals_data = {}
-        self.accepted_file_types = [".mat", ".dat", ".conf"]
+        self.accepted_file_types = [".mat", ".dat", ".conf", ".py"]
         self._proxy_model = CustomFilterProxyModel()
         self.global_ts_ref = None
         self.loaded_ts_ref = None
@@ -59,6 +60,18 @@ class QuadViewModel(QObject):
             self.loaded_ts_ref = self._model.min_dict_value(self.loaded_data, ["TimestampLogfile"])
             self.global_ts_ref = self.loaded_ts_ref
             self.signal_new_data_loaded.emit()
+
+    def add_custom_data_points(self, path: pathlib.Path, parent_key: str = "CustomItems") -> None:
+        custom_data_points = self._model.import_custom_data_points(path, self.loaded_data)
+
+        if custom_data_points == {}:
+            return
+
+        if parent_key not in self.loaded_data:
+            self.loaded_data[parent_key] = {}
+
+        self.loaded_data[parent_key] = custom_data_points
+        self.signal_data_addition.emit(parent_key, list(custom_data_points.keys()))
 
     def update_tree_model(self):
         """ Regenerate the tree model from the loaded data and update the proxy model. """
@@ -172,6 +185,7 @@ class QuadViewModel(QObject):
         current_mat = pathlib.Path("")
         current_dat = pathlib.Path("")
         current_conf = pathlib.Path("")
+        pyfiles = []
 
         # Loop over all dropped files and only consider the latest of each file type
         for filepath in filepaths:
@@ -183,6 +197,8 @@ class QuadViewModel(QObject):
                 current_dat = filepath
             elif file_ext == ".conf":
                 current_conf = filepath
+            elif file_ext == ".py":
+                pyfiles.append(pathlib.Path(filepath))
 
         # Update - important, always parse the .mat file first
         if current_mat.is_file():
@@ -194,6 +210,10 @@ class QuadViewModel(QObject):
 
         if current_conf.is_file():
             self.parse_and_load_conf(current_conf)
+
+        if pyfiles:
+            for pyfile in pyfiles:
+                self.add_custom_data_points(pyfile)
 
     def get_signal_data(self, item_path) -> tuple[list, list, str]:
         """
@@ -213,9 +233,14 @@ class QuadViewModel(QObject):
 
         if parent in self.selected_signals_data:
             if child in self.selected_signals_data[parent]:
-                ts = self.selected_signals_data[parent]["ts"]
-                val = self.selected_signals_data[parent][child]
-                signal_name = f"{parent}/{child}"
+                if isinstance(self.selected_signals_data[parent][child], dict): # handles the custom added items
+                    ts = self.selected_signals_data[parent][child]["ts"]
+                    val = self.selected_signals_data[parent][child]["val"]
+                    signal_name = f"{parent}/{child}"
+                else:
+                    ts = self.selected_signals_data[parent]["ts"]
+                    val = self.selected_signals_data[parent][child]
+                    signal_name = f"{parent}/{child}"
 
         return ts, val, signal_name
 
@@ -284,6 +309,7 @@ class QuadViewModel(QObject):
 
         temp_data = self.loaded_data
         parent = None
+        child = signal_path[-1]
 
         # Traverse up to the second-last key
         for key in signal_path[:-1]:
@@ -303,13 +329,31 @@ class QuadViewModel(QObject):
                 # Add modified ts and original
                 self.selected_signals_data[parent] = {"ts": ts}
                 self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
+            else:
+                print(f"{parent} for {child} was not found! Skipping signal.")
+                return False
+        elif isinstance(temp_data[child], dict): # handle custom items
+            child_data = temp_data.get(child, [])
+            ts = child_data.get("x").copy()
 
-        signal_key = signal_path[-1]
+            # Adjust the timestamp based on global ts reference
+            if self.global_ts_ref is not None and self.global_ts_ref != 0:
+                ts -= self.global_ts_ref
+
+            parent = signal_path[-2]
+            if parent not in self.selected_signals_data:
+                self.selected_signals_data[parent] = {}
+
+            self.selected_signals_data[parent][child] = {"ts": ts}
+            self.selected_signals_data[parent][child]["ts_raw"] = child_data.get("x")
+            self.selected_signals_data[parent][child]["val"] = child_data.get("y")
+            return True
+
         if not parent:
-            print(f"Timestamp for {signal_key} was not found! Skipping signal.")
+            print(f"Timestamp for {child} was not found! Skipping signal.")
             return False
 
-        self.selected_signals_data[parent][signal_key] = temp_data.get(signal_key, [])
+        self.selected_signals_data[parent][child] = temp_data.get(child, [])
         return True
 
 if __name__ == '__main__':
