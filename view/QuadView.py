@@ -400,7 +400,13 @@ class QuadView(QMainWindow):
         self._view_model.set_and_load_mat(path)
 
     def on_data_addition(self, parent_key: str, child_keys: list):
-        """ Function to visually add a new item in the tree menu and make it searchable. """
+        """
+        Visually updates the tree menu by adding a parent item and attaching the specified child items under it.
+        However, it does **not** modify the backend memory — only the visual representation in the UI.
+
+        :param parent_key: The name of the parent item to be added (or updated) in the tree menu.
+        :param child_keys: A list of child items to be added under the specified parent.
+        """
         model = self.tree_view.model()
         if not model:
             return
