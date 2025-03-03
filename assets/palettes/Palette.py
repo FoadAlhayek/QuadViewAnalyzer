@@ -25,8 +25,7 @@ class Theme:
     highlight_text = "#051650"
     placeholder_text = "#7f7f7f"
     empty_widget = "#FAF9F6"
-    nice_red = "#ff0053"
-    logo_white = "#eeeeee"
+    legend_text = "#f5ece9"
 
 
 class LightTheme(Theme):
