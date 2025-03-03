@@ -208,12 +208,16 @@ class QuadViewModel(QObject):
             self.dat = current_dat
             self.update_video_file()
 
-        if current_conf.is_file():
-            self.parse_and_load_conf(current_conf)
-
         if pyfiles:
             for pyfile in pyfiles:
-                self.add_custom_data_points(pyfile)
+                try:
+                    self.add_custom_data_points(pyfile)
+                except Exception as e:
+                    print(f"\033[91mCould not parse {pyfile} due to {type(e).__name__}: {e}\033[0m")
+                    continue
+
+        if current_conf.is_file():
+            self.parse_and_load_conf(current_conf)
 
     def get_signal_data(self, item_path) -> tuple[list, list, str]:
         """
