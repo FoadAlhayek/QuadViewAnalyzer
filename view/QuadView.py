@@ -12,7 +12,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
                                QTextEdit, QLineEdit)
-from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem
+from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem, QFont
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
 
 # Internal imports
@@ -38,6 +38,7 @@ class QuadView(QMainWindow):
         window_width = int(1200)
         window_height = int(800)
         tree_font_size = "8pt"
+        di_font_size = 10
         self.slider_scaling_factor = 100
         self.cm = Colormap("fof20")
 
@@ -97,8 +98,32 @@ class QuadView(QMainWindow):
         #   Data Insight  #
         ###################
         di_ax = glw.addPlot(row=1, col=0, title="Data insight")
+
+        # Remove axis
         di_ax.hideAxis("bottom")
         di_ax.hideAxis("left")
+
+        # Set a fixed view range
+        di_ax.setXRange(0, 1)
+        di_ax.setYRange(0, 1)
+
+        # Disable mouse and scroll
+        di_ax.setMouseEnabled(x=False, y=False)
+
+        # Removes/Disables all right click options except for the Export
+        menu = di_ax.getViewBox().menu
+        for action in menu.actions():
+            menu.removeAction(action)
+        di_ax.ctrlMenu = None          # Remove Plot options menu
+        di_ax.hideButtons()            # Remove auto-scale [A] button
+
+        # Create the di-text item and make the font monospace for better alignment
+        self.di_text_item = pg.TextItem("", anchor=(0, 0), color="w")
+        self.di_text_item.setFont(QFont("Courier", di_font_size))
+
+        # Add the text item to the axis
+        di_ax.addItem(self.di_text_item)
+        self.di_text_item.setPos(0, 1)
 
         ###################
         #  BOTTOM RIGHT   #
