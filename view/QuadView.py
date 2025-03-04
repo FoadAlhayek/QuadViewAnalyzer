@@ -255,7 +255,7 @@ class QuadView(QMainWindow):
 
     def update_ts_bar_placeholder_text(self):
         self.global_ts_ref_bar.set_placeholder_text(self._view_model.get_current_ts_placeholder_text())
-        self.soft_reset_slider()
+        self.set_slider_range()
 
     def reset_global_ts_ref(self):
         """ Resets the timestamp to the most optimal value derived from the loaded data. """

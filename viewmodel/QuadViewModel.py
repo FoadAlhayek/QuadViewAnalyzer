@@ -337,9 +337,6 @@ class QuadViewModel(QObject):
                 # Add modified ts and original
                 self.selected_signals_data[parent] = {"ts": ts}
                 self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
-            else:
-                print(f"{parent} for {child} was not found! Skipping signal.")
-                return False
         elif isinstance(temp_data[child], dict): # handle custom items
             child_data = temp_data.get(child, [])
             ts = child_data.get("x").copy()
