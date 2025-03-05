@@ -227,7 +227,13 @@ class QuadViewModel(QObject):
                 if child == "ts" or child == "ts_raw":
                     continue
 
-                di_dict[child] = val[0]
+                if isinstance(val, dict):   # Handle custom items
+                    for c, v in val.items():
+                        if c == "ts" or c == "ts_raw":
+                            continue
+                        di_dict[child] = v[0]
+                else:
+                    di_dict[child] = val[0]
 
         return self._model.format_data_insight(di_dict)
 
