@@ -308,6 +308,7 @@ class QuadView(QMainWindow):
                     continue
                 signal_name = f"{parent}/{child}"
                 self.update_graph(ts, item, signal_name)
+        self.update_qva_on_item_change()
 
     def update_graph(self, x: list, y: list, signal_name: str) -> None:
         """
@@ -357,6 +358,10 @@ class QuadView(QMainWindow):
         self.slider.setValue(slider_min)
         self.vline.setPos(current_min)
 
+    def update_selected_signals_data_insight(self):
+        di_text = self._view_model.get_data_insight()
+        self.di_text_item.setPlainText(di_text)
+
     def update_selected_signals_display(self):
         """ Updates the text area to show which signals have been selected. """
         selected = self._view_model.selected_signals_data
@@ -398,8 +403,7 @@ class QuadView(QMainWindow):
 
                 # Update colormap, display, and slider
                 self.cm.release_color(signal_name)
-                self.update_selected_signals_display()
-                self.set_slider_range()
+                self.update_qva_on_item_change()
         else:
             item_added = self._view_model.select_item(item_path)
 
@@ -409,6 +413,12 @@ class QuadView(QMainWindow):
     def parse_and_load_conf(self, path: pathlib.Path):
         self._view_model.parse_and_load_conf(path)
 
+    def update_qva_on_item_change(self):
+        self.graph_ax.autoBtnClicked()
+        self.update_selected_signals_display()
+        self.update_selected_signals_data_insight()
+        self.set_slider_range()
+
     def add_signal(self, item: QStandardItem, item_path: list):
         # Highlight item in the tree menu
         item.setBackground(QColor(self.theme.highlight))
@@ -417,9 +427,7 @@ class QuadView(QMainWindow):
         # Add plot
         ts, val, signal_name = self._view_model.get_signal_data(item_path)
         self.update_graph(ts, val, signal_name)
-
-        self.update_selected_signals_display()
-        self.set_slider_range()
+        self.update_qva_on_item_change()
 
     def set_and_load_new_mat(self, path: pathlib.Path):
         self._view_model.set_and_load_mat(path)
@@ -479,6 +487,7 @@ class QuadView(QMainWindow):
             self.clear_graph_view_plots()
             self.clear_tree_highlighting()
             self.textbox_selected_signals.setPlainText("")
+            self.di_text_item.setPlainText("")
             self._view_model.deselect_all_signals()
             self.cm.reset()
             self.global_ts_ref_bar.set_placeholder_text(self._view_model.get_current_ts_placeholder_text())

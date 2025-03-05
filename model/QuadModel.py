@@ -181,5 +181,26 @@ class QuadModel:
 
         return custom_items
 
+    @staticmethod
+    def format_data_insight(data: dict) -> str:
+        """
+        Formats a dict into a readable and structured (left-aligned) string, where keys and values are aligned.
+        :param data:
+        :return:
+        """
+        if not data:
+            return ""
+
+        # Determine the maximum width for keys, values, and units, +1 for adding the colon back
+        max_key_length = max(len(key) for key in data.keys()) + 1
+        max_value_length = max(len(f"{value:.2f}") for value in data.values())
+
+        # Reformat the string
+        formatted_lines = [f"{key + ':':<{max_key_length}} {value:>{max_value_length}.2f}" for
+                           key, value in data.items()]
+
+        return "\n".join(formatted_lines)
+
+
 if __name__ == '__main__':
     pass

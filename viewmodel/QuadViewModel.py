@@ -220,6 +220,17 @@ class QuadViewModel(QObject):
             for conf in config_files:
                 self.parse_and_load_conf(conf)
 
+    def get_data_insight(self) -> str:
+        di_dict = {}
+        for parent, item in self.selected_signals_data.items():
+            for child, val in item.items():
+                if child == "ts" or child == "ts_raw":
+                    continue
+
+                di_dict[child] = val[0]
+
+        return self._model.format_data_insight(di_dict)
+
     def get_signal_data(self, item_path) -> tuple[list, list, str]:
         """
         Retrieves the timestamp, values, and signal name from the backend-memory.
