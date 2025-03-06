@@ -27,10 +27,11 @@ class QuadView(QMainWindow):
         # Init the ViewModel and connect the signals with a method
         self._view_model = view_model
         self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
-        self._view_model.signal_add_plot.connect(self.add_signal)
+        self._view_model.signal_silent_add_plot.connect(self.add_signal)
         self._view_model.signal_chosen_item_data_updated.connect(self.update_all_plots)
         self._view_model.signal_update_ts_bar_placeholder.connect(self.update_ts_bar_placeholder_text)
         self._view_model.signal_data_addition.connect(self.on_data_addition)
+        self._view_model.signal_update_qva.connect(self.update_qva_on_item_change)
 
         ##################
         # Init constants #
@@ -408,18 +409,26 @@ class QuadView(QMainWindow):
             item_added = self._view_model.select_item(item_path)
 
             if item_added:
-                self.add_signal(item, item_path)
+                self.add_signal(item, item_path, update_qva=True)
 
     def parse_and_load_conf(self, path: pathlib.Path):
         self._view_model.parse_and_load_conf(path)
 
     def update_qva_on_item_change(self):
+        """ Function to update and refresh the QVA application. """
         self.graph_ax.autoBtnClicked()
         self.update_selected_signals_display()
         self.update_selected_signals_data_insight()
         self.set_slider_range()
 
-    def add_signal(self, item: QStandardItem, item_path: list):
+    def add_signal(self, item: QStandardItem, item_path: list, update_qva: bool):
+        """
+        Adds an item to the graph view, and updates the display and data insight if enabled.
+        :param item: Item to be added
+        :param item_path: List of strings representing the path in either the tree or "parent/child" in memory.
+        :param update_qva: Updates the QVA, e.g., display and data insight
+        :return:
+        """
         # Highlight item in the tree menu
         item.setBackground(QColor(self.theme.highlight))
         item.setForeground(QColor(self.theme.highlight_text))
@@ -427,7 +436,9 @@ class QuadView(QMainWindow):
         # Add plot
         ts, val, signal_name = self._view_model.get_signal_data(item_path)
         self.update_graph(ts, val, signal_name)
-        self.update_qva_on_item_change()
+
+        if update_qva:
+            self.update_qva_on_item_change()
 
     def set_and_load_new_mat(self, path: pathlib.Path):
         self._view_model.set_and_load_mat(path)

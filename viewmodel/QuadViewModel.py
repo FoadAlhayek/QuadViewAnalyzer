@@ -17,11 +17,12 @@ from viewmodel.helpers.tree_menu_search_filter import CustomFilterProxyModel
 
 class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
-    signal_new_data_loaded = Signal()                     # Notifies the View that a new data file is loaded
-    signal_add_plot = Signal(QStandardItem, list)  # Notifies the View to plot a newly added item
-    signal_chosen_item_data_updated = Signal()            # Notifies the View that the chosen item data is updated
-    signal_update_ts_bar_placeholder = Signal()           # Notifies the View to update the placeholder text in ts bar
-    signal_data_addition = Signal(str, list)
+    signal_new_data_loaded = Signal()                                 # Notifies the View, that a new data file is loaded
+    signal_silent_add_plot = Signal(QStandardItem, list, bool) # -||- to plot a newly added item without updating QVA
+    signal_chosen_item_data_updated = Signal()                        # -||- that the chosen item data is updated
+    signal_update_ts_bar_placeholder = Signal()                       # -||- to update the placeholder text in ts bar
+    signal_data_addition = Signal(str, list)                   # -||- to add new items to the tree menu
+    signal_update_qva = Signal()                                      # -||- to update the QVA (display, DI, slider, etc.)
 
     def __init__(self, model):
         super().__init__()
@@ -178,7 +179,8 @@ class QuadViewModel(QObject):
                     self.deselect_item(item_path)
                     return
 
-                self.signal_add_plot.emit(item, item_path)
+                self.signal_silent_add_plot.emit(item, item_path, False)
+        self.signal_update_qva.emit()
 
     def handle_dropped_files(self, filepaths: list[pathlib.Path]):
         # To prevent loading in multiple mat files at the same time
