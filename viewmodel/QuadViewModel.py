@@ -223,19 +223,27 @@ class QuadViewModel(QObject):
                 self.parse_and_load_conf(conf)
 
     def get_data_insight(self) -> str:
+        """ Returns a formatted summary of selected signals that exists in the memory (excluding timestamps). """
+        skip_keys = ("ts", "ts_raw")
         di_dict = {}
         for parent, item in self.selected_signals_data.items():
             for child, val in item.items():
-                if child == "ts" or child == "ts_raw":
+                if child in skip_keys:
                     continue
 
-                if isinstance(val, dict):   # Handle custom items
-                    for c, v in val.items():
-                        if c == "ts" or c == "ts_raw":
-                            continue
-                        di_dict[child] = v[0]
+                # Lazy handle duplicates
+                if child in di_dict:
+                    item_name = f"{parent}/{child}"
                 else:
-                    di_dict[child] = val[0]
+                    item_name = child
+
+                if isinstance(val, dict):   # Handle custom items
+                    for sub_key, sub_val in val.items():
+                        if sub_key in skip_keys:
+                            continue
+                        di_dict[item_name] = sub_val[0]
+                else:
+                    di_dict[item_name] = val[0]
 
         return self._model.format_data_insight(di_dict)
 
