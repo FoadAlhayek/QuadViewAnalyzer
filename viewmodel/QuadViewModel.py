@@ -9,6 +9,7 @@ emits back the result to the View.
 Usage: main.py, QuadView.py
 """
 import pathlib
+import numpy as np
 from PySide6.QtCore import QObject, Signal, QRegularExpression, QTimer, QAbstractItemModel
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 
@@ -164,6 +165,7 @@ class QuadViewModel(QObject):
 
         :param path: Path to the configuration file.
         """
+        at_least_one_addition = False
         parsed_conf_data = self._model.parse_conf(path, sep=";")
 
         for item_path in parsed_conf_data:
@@ -172,6 +174,7 @@ class QuadViewModel(QObject):
 
             item_added = self.select_item(item_path)
             if item_added:
+                at_least_one_addition = True
                 item = self.find_tree_item_by_path(item_path)
 
                 # Mismatch between data and tree menu (should not be possible due to item_added)
@@ -180,7 +183,9 @@ class QuadViewModel(QObject):
                     return
 
                 self.signal_silent_add_plot.emit(item, item_path, False)
-        self.signal_update_qva.emit()
+
+        if at_least_one_addition:
+            self.signal_update_qva.emit()
 
     def handle_dropped_files(self, filepaths: list[pathlib.Path]):
         # To prevent loading in multiple mat files at the same time
@@ -222,8 +227,38 @@ class QuadViewModel(QObject):
             for conf in config_files:
                 self.parse_and_load_conf(conf)
 
-    def get_data_insight(self) -> str:
-        """ Returns a formatted summary of selected signals that exists in the memory (excluding timestamps). """
+    def get_time_based_data_insight(self, graph_plots: dict, ref_time: float) -> str:
+        """
+        Returns a formatted data insight text and values based on the chosen time.
+
+        :param graph_plots: Dictionary containing graph plot data with keys as item names and values as data arrays.
+        :param ref_time: The reference time for which the data insight is to be retrieved.
+        :return: Formatted string containing the data insight text and values based on the chosen time.
+        """
+        di_dict = {}
+        for key, val in graph_plots.items():
+            try:
+                parent, child = key.split("/")
+
+                if child in di_dict:
+                    item_name = f"{parent}/{child}"
+                else:
+                    item_name = child
+            except ValueError:
+                item_name = key
+
+            # Get the index for the time that closest matches up with chosen reference time
+            x = val.getData()[0]
+            idx = np.argmin(np.abs(x - ref_time))
+            y = val.getData()[1][idx]
+
+            # Store
+            di_dict[item_name] = y
+
+        return self._model.format_data_insight(di_dict)
+
+    def get_default_data_insight(self) -> str:
+        """ Returns a formatted summary of selected signals that exists in the memory (excluding ts) at index 0. """
         skip_keys = ("ts", "ts_raw")
         di_dict = {}
         for parent, item in self.selected_signals_data.items():

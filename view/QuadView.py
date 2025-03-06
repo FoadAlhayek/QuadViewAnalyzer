@@ -326,9 +326,15 @@ class QuadView(QMainWindow):
             pen = pg.mkPen(self.cm.get_color(item_id=signal_name), width=2)
             self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
 
-    def on_slider_change(self, value: int):
-        non_scaled_value = value / self.slider_scaling_factor
-        self.vline.setPos(non_scaled_value)
+    def on_slider_change(self, slider_value: int):
+        time = slider_value / self.slider_scaling_factor
+
+        # Update the vertical line
+        self.vline.setPos(time)
+
+        # Update data insight text
+        di_text = self._view_model.get_time_based_data_insight(self.graph_plots, time)
+        self.di_text_item.setPlainText(di_text)
 
     def set_slider_range(self):
         """
@@ -348,19 +354,17 @@ class QuadView(QMainWindow):
         current_max = int(np.ceil(max(x_vals)))
 
         # Scale
-        slider_min = current_min * self.slider_scaling_factor
-        slider_max = current_max * self.slider_scaling_factor
+        slider_max = (current_max - current_min) * self.slider_scaling_factor
 
         # Update the slider's range
-        self.slider.setMinimum(slider_min)
+        self.slider.setMinimum(0)
         self.slider.setMaximum(slider_max)
 
-        # Reset the slider value and vertical line to the new min
-        self.slider.setValue(slider_min)
-        self.vline.setPos(current_min)
+        # Reset the slider value and vertical line
+        self.soft_reset_slider()
 
     def update_selected_signals_data_insight(self):
-        di_text = self._view_model.get_data_insight()
+        di_text = self._view_model.get_default_data_insight()
         self.di_text_item.setPlainText(di_text)
 
     def update_selected_signals_display(self):
