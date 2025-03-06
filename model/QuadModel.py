@@ -172,15 +172,17 @@ class QuadModel:
                 continue
 
             x, y = result
-            if isinstance(x, float):
-                x = np.array([x])
 
-            if isinstance(y, float):
-                y = np.array([y])
+            # Standardize data as float arrays
+            if isinstance(x, (int, float)):
+                x = np.array([float(x)])
+
+            if isinstance(y, (int, float)):
+                y = np.array([float(y)])
 
             if len(x) == 0 or len(y) == 0:
                 continue
-
+            
             custom_items[func_name] = {}
             custom_items[func_name]["x"] = np.array(x)
             custom_items[func_name]["y"] = np.array(y)
