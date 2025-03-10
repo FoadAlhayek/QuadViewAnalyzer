@@ -301,14 +301,27 @@ class QuadView(QMainWindow):
 
     def update_all_plots(self) -> None:
         """ Re-plots all plots that are in memory. Used when ref ts is changed. """
-        for parent, keys in self._view_model.selected_signals_data.items():
-            ts = keys["ts"]
+        skip_keys = ("ts", "ts_raw")
+        for parent, entries in self._view_model.selected_signals_data.items():
+            # Read one instance and check if it is a nested dict (if nested == custom item)
+            custom_dict = isinstance(next(iter(entries.values()), None), dict)
+            if custom_dict:
+                for child, custom_entries in entries.items():
+                    ts = custom_entries["ts"]
+                    for key, val in custom_entries.items():
+                        if key in skip_keys:
+                            continue
+                        signal_name = f"{parent}/{child}"
+                        self.update_graph(ts, val, signal_name)
+            elif "ts" in entries:
+                ts = entries["ts"]
 
-            for child, item in keys.items():
-                if child in ["ts", "ts_raw"]:
-                    continue
-                signal_name = f"{parent}/{child}"
-                self.update_graph(ts, item, signal_name)
+                for child, item in entries.items():
+                    if child in skip_keys:
+                        continue
+                    signal_name = f"{parent}/{child}"
+                    self.update_graph(ts, item, signal_name)
+
         self.update_qva_on_item_change()
 
     def update_graph(self, x: list, y: list, signal_name: str) -> None:
@@ -321,10 +334,23 @@ class QuadView(QMainWindow):
         :param signal_name: Name of the signal to plot. Here it follows the "parent/child" naming convention.
         """
         if signal_name in self.graph_plots:
-            self.graph_plots[signal_name].setData(x, y)
+            if isinstance(self.graph_plots[signal_name], tuple):
+                vline, _ = self.graph_plots[signal_name]
+                vline.setPos((x[0], y[0]))
+            else:
+                self.graph_plots[signal_name].setData(x, y)
         else:
             pen = pg.mkPen(self.cm.get_color(item_id=signal_name), width=2)
-            self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
+
+            if len(x) == 1:
+                # Create a dummy plot so it is shows up as a legend
+                vline = pg.InfiniteLine(pos=(x[0], y[0]), angle=90, movable=False, pen=pen, name=signal_name)
+                dummy_plot = self.graph_ax.plot([], [], pen=pen, name=signal_name)
+
+                self.graph_ax.addItem(vline)
+                self.graph_plots[signal_name] = (vline, dummy_plot)
+            else:
+                self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
 
     def on_slider_change(self, slider_value: int):
         time = slider_value / self.slider_scaling_factor
@@ -346,11 +372,13 @@ class QuadView(QMainWindow):
             return
 
         # Compute min
-        x_vals = [item.getData()[0][0] for item in self.graph_plots.values()]
+        x_vals = [item.getData()[0][0] for item in self.graph_plots.values() if not isinstance(item, tuple)]
+        if not x_vals:
+            return     # if only vertical lines
         current_min = int(min(x_vals))
 
         # Compute max
-        x_vals = [item.getData()[0][-1] for item in self.graph_plots.values()]
+        x_vals = [item.getData()[0][-1] for item in self.graph_plots.values() if not isinstance(item, tuple)]
         current_max = int(np.ceil(max(x_vals)))
 
         # Scale
@@ -402,8 +430,13 @@ class QuadView(QMainWindow):
                 item.setBackground(QColor(self.theme.background))
                 item.setForeground(QColor(self.theme.text))
 
-                # Remove the deselected signal plot
-                self.graph_ax.removeItem(self.graph_plots[signal_name])
+                # Remove the deselected signal plot/vertical line
+                if isinstance(self.graph_plots[signal_name], tuple):
+                    vline, dummy_plot = self.graph_plots[signal_name]
+                    self.graph_ax.removeItem(vline)
+                    self.graph_ax.removeItem(dummy_plot)
+                else:
+                    self.graph_ax.removeItem(self.graph_plots[signal_name])
                 del self.graph_plots[signal_name]
 
                 # Update colormap, display, and slider

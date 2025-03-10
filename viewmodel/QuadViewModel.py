@@ -70,9 +70,16 @@ class QuadViewModel(QObject):
             return
 
         if parent_key not in self.loaded_data:
-            self.loaded_data[parent_key] = {}
+            self.loaded_data[parent_key] = custom_data_points
+            self.signal_data_addition.emit(parent_key, list(custom_data_points.keys()))
+            return
 
-        self.loaded_data[parent_key] = custom_data_points
+        for key, val in custom_data_points.items():
+            if key in self.loaded_data[parent_key]:
+                self.loaded_data[parent_key][key].update(val)
+            else:
+                self.loaded_data[parent_key][key] = val
+
         self.signal_data_addition.emit(parent_key, list(custom_data_points.keys()))
 
     def update_tree_model(self):
@@ -102,7 +109,14 @@ class QuadViewModel(QObject):
             return False
 
         for item in self.selected_signals_data.values():
-            item["ts"] = item["ts_raw"] - self.global_ts_ref
+            # Read one instance and check if it is a nested dict (if nested == custom item)
+            custom_dict = isinstance(next(iter(item.values()), None), dict)
+
+            if custom_dict:
+                for custom_item in item.values():
+                    custom_item["ts"] = custom_item["ts_raw"] - self.global_ts_ref
+            elif "ts_raw" in item:
+                item["ts"] = item["ts_raw"] - self.global_ts_ref
 
         # Notify the View the memory has been updated
         self.signal_chosen_item_data_updated.emit()
@@ -247,10 +261,14 @@ class QuadViewModel(QObject):
             except ValueError:
                 item_name = key
 
-            # Get the index for the time that closest matches up with chosen reference time
-            x = val.getData()[0]
-            idx = np.argmin(np.abs(x - ref_time))
-            y = val.getData()[1][idx]
+            if isinstance(val, tuple):
+                vline, _ = val
+                y = vline.getYPos()
+            else:
+                # Get the index for the time that closest matches up with chosen reference time
+                x = val.getData()[0]
+                idx = np.argmin(np.abs(x - ref_time))
+                y = val.getData()[1][idx]
 
             # Store
             di_dict[item_name] = y
@@ -263,7 +281,10 @@ class QuadViewModel(QObject):
         di_dict = {}
         for parent, item in self.selected_signals_data.items():
             for child, val in item.items():
-                if child in skip_keys:
+                custom_items = isinstance(val, dict)
+
+                # Only check normal items, custom items are handled separately
+                if child in skip_keys and not custom_items:
                     continue
 
                 # Lazy handle duplicates
@@ -272,7 +293,7 @@ class QuadViewModel(QObject):
                 else:
                     item_name = child
 
-                if isinstance(val, dict):   # Handle custom items
+                if custom_items:   # Handle custom items
                     for sub_key, sub_val in val.items():
                         if sub_key in skip_keys:
                             continue
@@ -344,13 +365,17 @@ class QuadViewModel(QObject):
 
         parent = signal_path[-2]
         child = signal_path[-1]
+        custom_item = isinstance(self.selected_signals_data[parent][child], dict)
 
         try:
             # Delete the entire parent dict if only the ts, ts_raw and child key exists, otherwise delete the child only
-            if len(self.selected_signals_data[parent]) <= 3:
-                del self.selected_signals_data[parent]
-            else:
+            if custom_item:
                 del self.selected_signals_data[parent][child]
+            else:
+                if len(self.selected_signals_data[parent]) <= 3:
+                    del self.selected_signals_data[parent]
+                else:
+                    del self.selected_signals_data[parent][child]
             signal_name = f"{parent}/{child}"
         except KeyError:
             return False, signal_name
@@ -385,21 +410,8 @@ class QuadViewModel(QObject):
         if temp_data == {}:
             return False
 
-        if "TimestampLogfile" in temp_data:
-            parent = signal_path[-2]
-
-            # No need to store the same ts
-            if parent not in self.selected_signals_data:
-                ts = temp_data.get("TimestampLogfile").copy()
-
-                # Adjust the timestamp based on global ts reference
-                if self.global_ts_ref is not None and self.global_ts_ref != 0:
-                    ts -= self.global_ts_ref
-
-                # Add modified ts and original
-                self.selected_signals_data[parent] = {"ts": ts}
-                self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
-        elif isinstance(temp_data[child], dict): # handle custom items
+        # Handle custom items
+        if isinstance(temp_data.get(child, []), dict):
             child_data = temp_data.get(child, [])
             ts = child_data.get("x").copy()
 
@@ -414,13 +426,27 @@ class QuadViewModel(QObject):
             self.selected_signals_data[parent][child] = {"ts": ts}
             self.selected_signals_data[parent][child]["ts_raw"] = child_data.get("x")
             self.selected_signals_data[parent][child]["val"] = child_data.get("y")
-            return True
+        # Handle general TimestampLogfile items
+        elif "TimestampLogfile" in temp_data:
+            parent = signal_path[-2]
+
+            # No need to store the same ts
+            if parent not in self.selected_signals_data:
+                ts = temp_data.get("TimestampLogfile").copy()
+
+                # Adjust the timestamp based on global ts reference
+                if self.global_ts_ref is not None and self.global_ts_ref != 0:
+                    ts -= self.global_ts_ref
+
+                # Add modified ts and original
+                self.selected_signals_data[parent] = {"ts": ts}
+                self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
+            self.selected_signals_data[parent][child] = temp_data.get(child, [])
 
         if not parent:
             print(f"Timestamp for {child} was not found! Skipping signal.")
             return False
 
-        self.selected_signals_data[parent][child] = temp_data.get(child, [])
         return True
 
 if __name__ == '__main__':
