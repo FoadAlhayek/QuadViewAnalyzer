@@ -23,6 +23,8 @@ class Theme:
     button_text = "#0B1215"
     highlight = "#87CEFA"
     highlight_text = "#051650"
+    accent = "#f2bf15"
+    accent_text = "#231d07"
     placeholder_text = "#7f7f7f"
     empty_widget = "#FAF9F6"
     legend_text = "#f5ece9"

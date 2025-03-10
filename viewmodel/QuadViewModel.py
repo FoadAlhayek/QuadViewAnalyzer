@@ -32,6 +32,7 @@ class QuadViewModel(QObject):
         self.dat = pathlib.Path("")
         self.loaded_data = {}
         self.selected_signals_data = {}
+        self.selected_di_only_data = {}
         self.accepted_file_types = [".mat", ".dat", ".conf", ".py"]
         self._proxy_model = CustomFilterProxyModel()
         self.global_ts_ref = None
@@ -104,19 +105,20 @@ class QuadViewModel(QObject):
         # Update and recompute ts in memory
         self.global_ts_ref = ts
 
-        if self.selected_signals_data == {}:
+        if self.selected_signals_data == {} and self.selected_di_only_data == {}:
             self.signal_update_ts_bar_placeholder.emit()
             return False
 
-        for item in self.selected_signals_data.values():
-            # Read one instance and check if it is a nested dict (if nested == custom item)
-            custom_dict = isinstance(next(iter(item.values()), None), dict)
+        for backend_memory in [self.selected_signals_data, self.selected_di_only_data]:
+            for item in backend_memory.values():
+                # Read one instance and check if it is a nested dict (if nested == custom item)
+                custom_dict = isinstance(next(iter(item.values()), None), dict)
 
-            if custom_dict:
-                for custom_item in item.values():
-                    custom_item["ts"] = custom_item["ts_raw"] - self.global_ts_ref
-            elif "ts_raw" in item:
-                item["ts"] = item["ts_raw"] - self.global_ts_ref
+                if custom_dict:
+                    for custom_item in item.values():
+                        custom_item["ts"] = custom_item["ts_raw"] - self.global_ts_ref
+                elif "ts_raw" in item:
+                    item["ts"] = item["ts_raw"] - self.global_ts_ref
 
         # Notify the View the memory has been updated
         self.signal_chosen_item_data_updated.emit()
@@ -142,9 +144,13 @@ class QuadViewModel(QObject):
 
     def deselect_all_signals(self):
         self.selected_signals_data = {}
+        self.selected_di_only_data = {}
 
     def update_video_file(self):
         pass
+
+    def tree_item_to_path(self, item: QStandardItem) -> list:
+        return self._model.qt_item_to_path(item)
 
     def find_tree_item_by_path(self, item_path: list) -> QStandardItem | None:
         """
@@ -273,13 +279,41 @@ class QuadViewModel(QObject):
             # Store
             di_dict[item_name] = y
 
+        skip_keys = ("ts", "ts_raw")
+        for parent, item in self.selected_di_only_data.items():
+            for child, val in item.items():
+                custom_items = isinstance(val, dict)
+
+                # Only check normal items, custom items are handled separately
+                if child in skip_keys and not custom_items:
+                    continue
+
+                # Lazy handle duplicates
+                if child in di_dict:
+                    item_name = f"{parent}/{child}"
+                else:
+                    item_name = child
+
+                if custom_items:  # Handle custom items
+                    for sub_key, sub_val in val.items():
+                        if sub_key in skip_keys:
+                            continue
+                        idx = np.argmin(np.abs(val["ts"] - ref_time))
+                        y = sub_val[idx]
+                        di_dict[item_name] = y
+                else:
+                    idx = np.argmin(np.abs(item["ts"] - ref_time))
+                    y = val[idx]
+                    di_dict[item_name] = y
+
         return self._model.format_data_insight(di_dict)
 
     def get_default_data_insight(self) -> str:
         """ Returns a formatted summary of selected signals that exists in the memory (excluding ts) at index 0. """
         skip_keys = ("ts", "ts_raw")
         di_dict = {}
-        for parent, item in self.selected_signals_data.items():
+        merged_data = self._model.merge_dicts(self.selected_signals_data, self.selected_di_only_data)
+        for parent, item in merged_data.items():
             for child, val in item.items():
                 custom_items = isinstance(val, dict)
 
@@ -332,6 +366,24 @@ class QuadViewModel(QObject):
 
         return ts, val, signal_name
 
+    def is_di_already_selected(self, item_path: list) -> bool:
+        """
+        Helper function for the View, to know if the item is selected and exists already in the secondary memory (DI).
+        :param item_path: An array where each element is a key in a dict
+        :return: Bool if the item exists in the secondary Data Insight memory.
+        """
+        if self._model.invalid_signal(item_path):
+            return False
+
+        parent = item_path[-2]
+        child = item_path[-1]
+
+        if parent in self.selected_di_only_data:
+            if child in self.selected_di_only_data[parent]:
+                return True
+
+        return False
+
     def is_signal_already_selected(self, signal_path: list) -> bool:
         """
         Helper function for the View, to know if the signal is selected and exists already in the backend (ViewModel).
@@ -350,39 +402,43 @@ class QuadViewModel(QObject):
 
         return False
 
-    def deselect_item(self, signal_path: list) -> tuple[bool, str]:
+    def deselect_item(self, signal_path: list, backend_memory: dict = None) -> tuple[bool, str]:
         """
         Deselects the signal, see select_item() for more information.
 
         This is the only function that handles deleting chosen item data from the backend-memory.
 
         :param signal_path: An array where each element is a key in a dict
+        :param backend_memory: Default is the primary memory -> selected_signals_data
         :return: Bool if the signal was removed and the signal name that was deleted
         """
+        if backend_memory is None:
+            backend_memory = self.selected_signals_data
+
         signal_name = ""
         if self._model.invalid_signal(signal_path):
             return False, signal_name
 
         parent = signal_path[-2]
         child = signal_path[-1]
-        custom_item = isinstance(self.selected_signals_data[parent][child], dict)
+        custom_item = isinstance(backend_memory[parent][child], dict)
 
         try:
             # Delete the entire parent dict if only the ts, ts_raw and child key exists, otherwise delete the child only
             if custom_item:
-                del self.selected_signals_data[parent][child]
+                del backend_memory[parent][child]
             else:
-                if len(self.selected_signals_data[parent]) <= 3:
-                    del self.selected_signals_data[parent]
+                if len(backend_memory[parent]) <= 3:
+                    del backend_memory[parent]
                 else:
-                    del self.selected_signals_data[parent][child]
+                    del backend_memory[parent][child]
             signal_name = f"{parent}/{child}"
         except KeyError:
             return False, signal_name
 
         return True, signal_name
 
-    def select_item(self, signal_path: list) -> bool:
+    def select_item(self, signal_path: list, backend_memory: dict = None) -> bool:
         """
         Stores user-picked signals in a dict with their corresponding timestamp.
         Dict format: {parent1: {ts, child1, child2}, parent2: {ts, child1}}
@@ -394,8 +450,12 @@ class QuadViewModel(QObject):
         original values. If that is an issue, expand the function to handle that scenario. For now, too much overhead.
 
         :param signal_path: An array where each element is a key in a dict
+        :param backend_memory: Default is the primary memory -> selected_signals_data
         :return: Bool if the signal was added
         """
+        if backend_memory is None:
+            backend_memory = self.selected_signals_data
+
         if self._model.invalid_signal(signal_path):
             return False
 
@@ -420,18 +480,18 @@ class QuadViewModel(QObject):
                 ts -= self.global_ts_ref
 
             parent = signal_path[-2]
-            if parent not in self.selected_signals_data:
-                self.selected_signals_data[parent] = {}
+            if parent not in backend_memory:
+                backend_memory[parent] = {}
 
-            self.selected_signals_data[parent][child] = {"ts": ts}
-            self.selected_signals_data[parent][child]["ts_raw"] = child_data.get("x")
-            self.selected_signals_data[parent][child]["val"] = child_data.get("y")
+            backend_memory[parent][child] = {"ts": ts}
+            backend_memory[parent][child]["ts_raw"] = child_data.get("x")
+            backend_memory[parent][child]["val"] = child_data.get("y")
         # Handle general TimestampLogfile items
         elif "TimestampLogfile" in temp_data:
             parent = signal_path[-2]
 
             # No need to store the same ts
-            if parent not in self.selected_signals_data:
+            if parent not in backend_memory:
                 ts = temp_data.get("TimestampLogfile").copy()
 
                 # Adjust the timestamp based on global ts reference
@@ -439,9 +499,9 @@ class QuadViewModel(QObject):
                     ts -= self.global_ts_ref
 
                 # Add modified ts and original
-                self.selected_signals_data[parent] = {"ts": ts}
-                self.selected_signals_data[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
-            self.selected_signals_data[parent][child] = temp_data.get(child, [])
+                backend_memory[parent] = {"ts": ts}
+                backend_memory[parent]["ts_raw"] = temp_data.get("TimestampLogfile")
+            backend_memory[parent][child] = temp_data.get(child, [])
 
         if not parent:
             print(f"Timestamp for {child} was not found! Skipping signal.")

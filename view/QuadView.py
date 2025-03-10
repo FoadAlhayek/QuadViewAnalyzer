@@ -10,10 +10,10 @@ import sys
 import pathlib
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
-                               QTextEdit, QLineEdit)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QAbstractItemView, QMainWindow, QTextEdit,
+                               QLineEdit)
 from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem, QFont
-from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
+from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel, QModelIndex
 
 # Internal imports
 import assets.widgets as c_widgets
@@ -144,9 +144,10 @@ class QuadView(QMainWindow):
         ######################
         # TREE MENU SETTINGS #
         ######################
-        self.tree_view = QTreeView()
+        self.tree_view = c_widgets.CustomTreeView()
         self.tree_view.setMinimumWidth(200)
         self.tree_view.setHeaderHidden(False)
+
         # Turn off so we can manually control double-clicking and highlighting
         self.tree_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tree_view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -186,10 +187,13 @@ class QuadView(QMainWindow):
         # Connect with the ViewModel #
         ##############################
         self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
+        self.tree_view.rightDoubleClicked.connect(self.on_tree_item_right_double_clicked)
+
         button_new_mat_data.file_selected.connect(self.set_and_load_new_mat)
         button_clear_plots.clicked.connect(self.reset_ui_workspace)
         #button_normalize_plots.clicked.connect()
         button_add_predefined_signals.file_selected.connect(self.parse_and_load_conf)
+
         self.global_ts_ref_bar.value_submitted.connect(self.on_global_ts_ref_submit)
         self.global_ts_ref_bar.button_clicked.connect(self.reset_global_ts_ref)
 
@@ -359,8 +363,7 @@ class QuadView(QMainWindow):
         self.vline.setPos(time)
 
         # Update data insight text
-        di_text = self._view_model.get_time_based_data_insight(self.graph_plots, time)
-        self.di_text_item.setPlainText(di_text)
+        self.set_time_based_data_insight(time)
 
     def set_slider_range(self):
         """
@@ -391,7 +394,12 @@ class QuadView(QMainWindow):
         # Reset the slider value and vertical line
         self.soft_reset_slider()
 
-    def update_selected_signals_data_insight(self):
+    def set_time_based_data_insight(self, ref_time: float):
+        """ Sets data insight text and values based on the reference time provided. """
+        di_text = self._view_model.get_time_based_data_insight(self.graph_plots, ref_time)
+        self.di_text_item.setPlainText(di_text)
+
+    def set_default_selected_signals_data_insight(self):
         di_text = self._view_model.get_default_data_insight()
         self.di_text_item.setPlainText(di_text)
 
@@ -404,24 +412,57 @@ class QuadView(QMainWindow):
         ]
         self.textbox_selected_signals.setPlainText("\n".join(display_lines))
 
-    def on_tree_item_double_clicked(self, index):
-        """ Handles tree menu clicking features """
-        proxy_model: QSortFilterProxyModel|QAbstractItemModel = self.tree_view.model()
+    def index_to_item(self, index: QModelIndex) -> QStandardItem:
+        proxy_model: QSortFilterProxyModel | QAbstractItemModel = self.tree_view.model()
         source_index = proxy_model.mapToSource(index)
-        tree_model: QStandardItemModel|QAbstractItemModel = proxy_model.sourceModel()
-        item = tree_model.itemFromIndex(source_index)
+        tree_model: QStandardItemModel | QAbstractItemModel = proxy_model.sourceModel()
+        return tree_model.itemFromIndex(source_index)
+
+    def on_tree_item_right_double_clicked(self, index: QModelIndex):
+        """ Handles tree menu right-clicking features. """
+        item = self.index_to_item(index)
 
         # Ignore parent nodes
         if item.hasChildren():
-            return
+            return None
+
+        item_path = self._view_model.tree_item_to_path(item)
+
+        # Ignore already selected items that are in primary memory
+        if self._view_model.is_signal_already_selected(item_path):
+            return None
+
+        if self._view_model.is_di_already_selected(item_path):
+            item_deleted, signal_name = self._view_model.deselect_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
+            if item_deleted:
+                time = self.slider.value() / self.slider_scaling_factor
+                self.set_time_based_data_insight(time)
+
+                # Remove highlight of item in the tree menu
+                item.setBackground(QColor(self.theme.background))
+                item.setForeground(QColor(self.theme.text))
+        else:
+            item_added = self._view_model.select_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
+            if item_added:
+                time = self.slider.value() / self.slider_scaling_factor
+                self.set_time_based_data_insight(time)
+
+                # Highlight item in the tree menu
+                item.setBackground(QColor(self.theme.accent))
+                item.setForeground(QColor(self.theme.accent_text))
+
+    def on_tree_item_double_clicked(self, index: QModelIndex):
+        """ Handles tree menu clicking features (except for right-clicking). """
+        item = self.index_to_item(index)
+
+        # Ignore parent nodes
+        if item.hasChildren():
+            return None
 
         # Build dict path to be sent to ViewModel
-        item_path = []
-        temp_item = item
-        while temp_item is not None:
-            item_path.insert(0, temp_item.text())
-            temp_item = temp_item.parent()
-
+        item_path = self._view_model.tree_item_to_path(item)
         if self._view_model.is_signal_already_selected(item_path):
             item_deleted, signal_name = self._view_model.deselect_item(item_path)
 
@@ -455,7 +496,7 @@ class QuadView(QMainWindow):
         """ Function to update and refresh the QVA application. """
         self.graph_ax.autoBtnClicked()
         self.update_selected_signals_display()
-        self.update_selected_signals_data_insight()
+        self.set_default_selected_signals_data_insight()
         self.set_slider_range()
 
     def add_signal(self, item: QStandardItem, item_path: list, update_qva: bool):
@@ -466,6 +507,9 @@ class QuadView(QMainWindow):
         :param update_qva: Updates the QVA, e.g., display and data insight
         :return:
         """
+        if self._view_model.is_di_already_selected(item_path):
+            self._view_model.deselect_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
         # Highlight item in the tree menu
         item.setBackground(QColor(self.theme.highlight))
         item.setForeground(QColor(self.theme.highlight_text))

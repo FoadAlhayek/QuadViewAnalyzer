@@ -79,6 +79,15 @@ class QuadModel:
         return model
 
     @staticmethod
+    def qt_item_to_path(item: QStandardItem) -> list:
+        """ Converts a nested QStandardItem into a list that represents the path to it. """
+        item_path = []
+        while item is not None:
+            item_path.insert(0, item.text())
+            item = item.parent()
+        return item_path
+
+    @staticmethod
     def isinstance_sequence(arr):
         """ Helper function to determine if the variable is a sequence/list. """
         return isinstance(arr, (list, tuple, np.ndarray))
@@ -209,6 +218,31 @@ class QuadModel:
 
         return "\n".join(formatted_lines)
 
+    @staticmethod
+    def merge_dicts(base_dict: dict, override_dict: dict) -> dict:
+        """
+        Merges two dictionaries together, handles nested dictionaries and does not alter the values of either dict.
+        For keys that exist in both dicts, the values of override_dict (if present) are used in the resulting dict.
+
+        :param base_dict: The base dictionary.
+        :param override_dict: The dictionary whose values override or merge into base_dict
+        :return: The merged dict
+        """
+        merged_result = base_dict.copy()
+        stack = [(merged_result, override_dict)]
+
+        while stack:
+            current_base, current_source = stack.pop()
+
+            for key, source_val in current_source.items():
+                if key in current_base and isinstance(current_base[key], dict) and isinstance(current_source, dict):
+                    nested_base_copy = current_base[key].copy()
+                    current_base[key] = nested_base_copy
+                    stack.append((nested_base_copy, source_val))
+                else:
+                    current_base[key] = source_val
+
+        return merged_result
 
 if __name__ == '__main__':
     pass
