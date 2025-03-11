@@ -30,11 +30,21 @@ class QuadModel:
         return loadmat(filepath)
 
     @staticmethod
-    def parse_conf(path: pathlib.Path, sep=";"):
+    def parse_conf(path: pathlib.Path, sep=";", secondary_sep="/") -> tuple[list, list]:
+        """
+        Parses a .conf file by splitting non-comment, non-empty lines into tokens.
+        Lines containing the secondary separator are handled separately.
+
+        :param path: Path to the .conf file.
+        :param sep: Primary delimiter (default: ";").
+        :param secondary_sep: Secondary delimiter (default: "/").
+        :return: Tuple (primary_data, secondary_data), where each is a list of token lists.
+        """
         if path.suffix != ".conf":
-            return []
+            return [], []
 
         parsed_data = []
+        secondary_data = []
         with open(path, "r", encoding="utf-8") as fid:
             for row in fid:
                 row = row.strip()
@@ -44,10 +54,14 @@ class QuadModel:
                     continue
 
                 # Split based on sep and handle edge case of removing empty strings (caused by excess of sep)
-                items = [item.strip() for item in row.split(sep)]
-                items = [item for item in items if item.strip()]
-                parsed_data.append(items)
-        return parsed_data
+                if secondary_sep in row:
+                    items = [item.strip() for item in row.split(secondary_sep) if item.strip()]
+                    secondary_data.append(items)
+                else:
+                    items = [item.strip() for item in row.split(sep) if item.strip()]
+                    parsed_data.append(items)
+
+        return parsed_data, secondary_data
 
     @staticmethod
     def invalid_signal(path) -> bool:
@@ -77,6 +91,15 @@ class QuadModel:
                     if isinstance(value, dict):
                         stack.append((key_item, value))
         return model
+
+    @staticmethod
+    def qt_item_to_path(item: QStandardItem) -> list:
+        """ Converts a nested QStandardItem into a list that represents the path to it. """
+        item_path = []
+        while item is not None:
+            item_path.insert(0, item.text())
+            item = item.parent()
+        return item_path
 
     @staticmethod
     def isinstance_sequence(arr):
@@ -172,14 +195,68 @@ class QuadModel:
                 continue
 
             x, y = result
-            if len(x) == 0 or len(y) == []:
-                continue
 
+            # Standardize data as float arrays
+            if isinstance(x, (int, float)):
+                x = np.array([float(x)])
+
+            if isinstance(y, (int, float)):
+                y = np.array([float(y)])
+
+            if len(x) == 0 or len(y) == 0:
+                continue
+            
             custom_items[func_name] = {}
-            custom_items[func_name]["x"] = x
-            custom_items[func_name]["y"] = y
+            custom_items[func_name]["x"] = np.array(x)
+            custom_items[func_name]["y"] = np.array(y)
 
         return custom_items
+
+    @staticmethod
+    def format_data_insight(data: dict) -> str:
+        """
+        Formats a dict into a readable and structured (left-aligned) string, where keys and values are aligned.
+        :param data:
+        :return:
+        """
+        if not data:
+            return ""
+
+        # Determine the maximum width for keys, values, and units, +1 for adding the colon back
+        max_key_length = max(len(key) for key in data.keys()) + 1
+        max_value_length = max(len(f"{value:.2f}") for value in data.values())
+
+        # Reformat the string
+        formatted_lines = [f"{key + ':':<{max_key_length}} {value:>{max_value_length}.2f}" for
+                           key, value in data.items()]
+
+        return "\n".join(formatted_lines)
+
+    @staticmethod
+    def merge_dicts(base_dict: dict, override_dict: dict) -> dict:
+        """
+        Merges two dictionaries together, handles nested dictionaries and does not alter the values of either dict.
+        For keys that exist in both dicts, the values of override_dict (if present) are used in the resulting dict.
+
+        :param base_dict: The base dictionary.
+        :param override_dict: The dictionary whose values override or merge into base_dict
+        :return: The merged dict
+        """
+        merged_result = base_dict.copy()
+        stack = [(merged_result, override_dict)]
+
+        while stack:
+            current_base, current_source = stack.pop()
+
+            for key, source_val in current_source.items():
+                if key in current_base and isinstance(current_base[key], dict) and isinstance(current_source, dict):
+                    nested_base_copy = current_base[key].copy()
+                    current_base[key] = nested_base_copy
+                    stack.append((nested_base_copy, source_val))
+                else:
+                    current_base[key] = source_val
+
+        return merged_result
 
 if __name__ == '__main__':
     pass

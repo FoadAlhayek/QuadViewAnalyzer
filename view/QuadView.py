@@ -10,10 +10,10 @@ import sys
 import pathlib
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QSplitter, QAbstractItemView, QMainWindow,
-                               QTextEdit, QLineEdit)
-from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem
-from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QSplitter, QAbstractItemView, QMainWindow, QTextEdit,
+                               QLineEdit)
+from PySide6.QtGui import QIcon, QDragEnterEvent, QColor, QStandardItemModel, QStandardItem, QFont
+from PySide6.QtCore import Qt, QSortFilterProxyModel, QAbstractItemModel, QModelIndex
 
 # Internal imports
 import assets.widgets as c_widgets
@@ -27,10 +27,12 @@ class QuadView(QMainWindow):
         # Init the ViewModel and connect the signals with a method
         self._view_model = view_model
         self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
-        self._view_model.signal_add_plot.connect(self.add_signal)
+        self._view_model.signal_silent_add_plot.connect(self.add_signal)
+        self._view_model.signal_silent_add_di.connect(self.add_di_item)
         self._view_model.signal_chosen_item_data_updated.connect(self.update_all_plots)
         self._view_model.signal_update_ts_bar_placeholder.connect(self.update_ts_bar_placeholder_text)
         self._view_model.signal_data_addition.connect(self.on_data_addition)
+        self._view_model.signal_update_qva.connect(self.update_qva_on_item_change)
 
         ##################
         # Init constants #
@@ -38,6 +40,7 @@ class QuadView(QMainWindow):
         window_width = int(1200)
         window_height = int(800)
         tree_font_size = "8pt"
+        di_font_size = 10
         self.slider_scaling_factor = 100
         self.cm = Colormap("fof20")
 
@@ -97,8 +100,32 @@ class QuadView(QMainWindow):
         #   Data Insight  #
         ###################
         di_ax = glw.addPlot(row=1, col=0, title="Data insight")
+
+        # Remove axis
         di_ax.hideAxis("bottom")
         di_ax.hideAxis("left")
+
+        # Set a fixed view range
+        di_ax.setXRange(0, 1)
+        di_ax.setYRange(0, 1)
+
+        # Disable mouse and scroll
+        di_ax.setMouseEnabled(x=False, y=False)
+
+        # Removes/Disables all right click options except for the Export
+        menu = di_ax.getViewBox().menu
+        for action in menu.actions():
+            menu.removeAction(action)
+        di_ax.ctrlMenu = None          # Remove Plot options menu
+        di_ax.hideButtons()            # Remove auto-scale [A] button
+
+        # Create the di-text item and make the font monospace for better alignment
+        self.di_text_item = pg.TextItem("", anchor=(0, 0), color="w")
+        self.di_text_item.setFont(QFont("Courier", di_font_size))
+
+        # Add the text item to the axis
+        di_ax.addItem(self.di_text_item)
+        self.di_text_item.setPos(0, 1)
 
         ###################
         #  BOTTOM RIGHT   #
@@ -118,9 +145,10 @@ class QuadView(QMainWindow):
         ######################
         # TREE MENU SETTINGS #
         ######################
-        self.tree_view = QTreeView()
+        self.tree_view = c_widgets.CustomTreeView()
         self.tree_view.setMinimumWidth(200)
         self.tree_view.setHeaderHidden(False)
+
         # Turn off so we can manually control double-clicking and highlighting
         self.tree_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.tree_view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -160,10 +188,13 @@ class QuadView(QMainWindow):
         # Connect with the ViewModel #
         ##############################
         self.tree_view.doubleClicked.connect(self.on_tree_item_double_clicked)
+        self.tree_view.rightDoubleClicked.connect(self.on_tree_item_right_double_clicked)
+
         button_new_mat_data.file_selected.connect(self.set_and_load_new_mat)
         button_clear_plots.clicked.connect(self.reset_ui_workspace)
         #button_normalize_plots.clicked.connect()
         button_add_predefined_signals.file_selected.connect(self.parse_and_load_conf)
+
         self.global_ts_ref_bar.value_submitted.connect(self.on_global_ts_ref_submit)
         self.global_ts_ref_bar.button_clicked.connect(self.reset_global_ts_ref)
 
@@ -275,14 +306,28 @@ class QuadView(QMainWindow):
 
     def update_all_plots(self) -> None:
         """ Re-plots all plots that are in memory. Used when ref ts is changed. """
-        for parent, keys in self._view_model.selected_signals_data.items():
-            ts = keys["ts"]
+        skip_keys = ("ts", "ts_raw")
+        for parent, entries in self._view_model.selected_signals_data.items():
+            # Read one instance and check if it is a nested dict (if nested == custom item)
+            custom_dict = isinstance(next(iter(entries.values()), None), dict)
+            if custom_dict:
+                for child, custom_entries in entries.items():
+                    ts = custom_entries["ts"]
+                    for key, val in custom_entries.items():
+                        if key in skip_keys:
+                            continue
+                        signal_name = f"{parent}/{child}"
+                        self.update_graph(ts, val, signal_name)
+            elif "ts" in entries:
+                ts = entries["ts"]
 
-            for child, item in keys.items():
-                if child in ["ts", "ts_raw"]:
-                    continue
-                signal_name = f"{parent}/{child}"
-                self.update_graph(ts, item, signal_name)
+                for child, item in entries.items():
+                    if child in skip_keys:
+                        continue
+                    signal_name = f"{parent}/{child}"
+                    self.update_graph(ts, item, signal_name)
+
+        self.update_qva_on_item_change()
 
     def update_graph(self, x: list, y: list, signal_name: str) -> None:
         """
@@ -294,43 +339,75 @@ class QuadView(QMainWindow):
         :param signal_name: Name of the signal to plot. Here it follows the "parent/child" naming convention.
         """
         if signal_name in self.graph_plots:
-            self.graph_plots[signal_name].setData(x, y)
+            if isinstance(self.graph_plots[signal_name], tuple):
+                vline, _ = self.graph_plots[signal_name]
+                vline.setPos((x[0], y[0]))
+            else:
+                self.graph_plots[signal_name].setData(x, y)
         else:
             pen = pg.mkPen(self.cm.get_color(item_id=signal_name), width=2)
-            self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
 
-    def on_slider_change(self, value: int):
-        non_scaled_value = value / self.slider_scaling_factor
-        self.vline.setPos(non_scaled_value)
+            if len(x) == 1:
+                # Create a dummy plot so it is shows up as a legend
+                vline = pg.InfiniteLine(pos=(x[0], y[0]), angle=90, movable=False, pen=pen, name=signal_name)
+                dummy_plot = self.graph_ax.plot([], [], pen=pen, name=signal_name)
+
+                self.graph_ax.addItem(vline)
+                self.graph_plots[signal_name] = (vline, dummy_plot)
+            else:
+                self.graph_plots[signal_name] = self.graph_ax.plot(x, y, pen=pen, name=signal_name)
+
+    def on_slider_change(self, slider_value: int):
+        time = slider_value / self.slider_scaling_factor
+
+        # Update the vertical line
+        self.vline.setPos(time)
+
+        # Update data insight text
+        self.set_time_based_data_insight(time)
 
     def set_slider_range(self):
         """
-        Adjusts the slider's range and resets its value according to the x-values of all plotted data, assuming that
-        the x-values are increasing and in ascending order.
+        Adjusts the slider's range and resets its value according to the x-values of all plotted data and data insight
+        values, assuming that the x-values are increasing and in ascending order.
         """
-        if self.graph_plots == {}:
+        if self.graph_plots == {} and self._view_model.selected_di_only_data == {}:
             self.hard_reset_slider()
             return
 
+        di_min, di_max = self._view_model.get_time_range_in_data_insight()
+
         # Compute min
-        x_vals = [item.getData()[0][0] for item in self.graph_plots.values()]
+        x_vals = [item.getData()[0][0] for item in self.graph_plots.values() if not isinstance(item, tuple)]
+        if not x_vals and di_min == float("inf"):
+            return     # if only vertical lines and no DI
+
+        x_vals.append(di_min)
         current_min = int(min(x_vals))
 
         # Compute max
-        x_vals = [item.getData()[0][-1] for item in self.graph_plots.values()]
+        x_vals = [item.getData()[0][-1] for item in self.graph_plots.values() if not isinstance(item, tuple)]
+        x_vals.append(di_max)
         current_max = int(np.ceil(max(x_vals)))
 
         # Scale
-        slider_min = current_min * self.slider_scaling_factor
-        slider_max = current_max * self.slider_scaling_factor
+        slider_max = (current_max - current_min) * self.slider_scaling_factor
 
         # Update the slider's range
-        self.slider.setMinimum(slider_min)
+        self.slider.setMinimum(0)
         self.slider.setMaximum(slider_max)
 
-        # Reset the slider value and vertical line to the new min
-        self.slider.setValue(slider_min)
-        self.vline.setPos(current_min)
+        # Reset the slider value and vertical line
+        self.soft_reset_slider()
+
+    def set_time_based_data_insight(self, ref_time: float):
+        """ Sets data insight text and values based on the reference time provided. """
+        di_text = self._view_model.get_time_based_data_insight(self.graph_plots, ref_time)
+        self.di_text_item.setPlainText(di_text)
+
+    def set_default_selected_signals_data_insight(self):
+        di_text = self._view_model.get_default_data_insight()
+        self.di_text_item.setPlainText(di_text)
 
     def update_selected_signals_display(self):
         """ Updates the text area to show which signals have been selected. """
@@ -341,24 +418,52 @@ class QuadView(QMainWindow):
         ]
         self.textbox_selected_signals.setPlainText("\n".join(display_lines))
 
-    def on_tree_item_double_clicked(self, index):
-        """ Handles tree menu clicking features """
-        proxy_model: QSortFilterProxyModel|QAbstractItemModel = self.tree_view.model()
+    def index_to_item(self, index: QModelIndex) -> QStandardItem:
+        proxy_model: QSortFilterProxyModel | QAbstractItemModel = self.tree_view.model()
         source_index = proxy_model.mapToSource(index)
-        tree_model: QStandardItemModel|QAbstractItemModel = proxy_model.sourceModel()
-        item = tree_model.itemFromIndex(source_index)
+        tree_model: QStandardItemModel | QAbstractItemModel = proxy_model.sourceModel()
+        return tree_model.itemFromIndex(source_index)
+
+    def on_tree_item_right_double_clicked(self, index: QModelIndex):
+        """ Handles tree menu right-clicking features. """
+        item = self.index_to_item(index)
 
         # Ignore parent nodes
         if item.hasChildren():
-            return
+            return None
+
+        item_path = self._view_model.tree_item_to_path(item)
+
+        # Ignore already selected items that are in primary memory
+        if self._view_model.is_signal_already_selected(item_path):
+            return None
+
+        if self._view_model.is_di_already_selected(item_path):
+            item_deleted, signal_name = self._view_model.deselect_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
+            if item_deleted:
+                time = self.slider.value() / self.slider_scaling_factor
+                self.set_time_based_data_insight(time)
+
+                # Remove highlight of item in the tree menu
+                item.setBackground(QColor(self.theme.background))
+                item.setForeground(QColor(self.theme.text))
+        else:
+            item_added = self._view_model.select_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
+            if item_added:
+                self.add_di_item(item, update_qva=True)
+
+    def on_tree_item_double_clicked(self, index: QModelIndex):
+        """ Handles tree menu clicking features (except for right-clicking). """
+        item = self.index_to_item(index)
+
+        # Ignore parent nodes
+        if item.hasChildren():
+            return None
 
         # Build dict path to be sent to ViewModel
-        item_path = []
-        temp_item = item
-        while temp_item is not None:
-            item_path.insert(0, temp_item.text())
-            temp_item = temp_item.parent()
-
+        item_path = self._view_model.tree_item_to_path(item)
         if self._view_model.is_signal_already_selected(item_path):
             item_deleted, signal_name = self._view_model.deselect_item(item_path)
 
@@ -367,24 +472,61 @@ class QuadView(QMainWindow):
                 item.setBackground(QColor(self.theme.background))
                 item.setForeground(QColor(self.theme.text))
 
-                # Remove the deselected signal plot
-                self.graph_ax.removeItem(self.graph_plots[signal_name])
+                # Remove the deselected signal plot/vertical line
+                if isinstance(self.graph_plots[signal_name], tuple):
+                    vline, dummy_plot = self.graph_plots[signal_name]
+                    self.graph_ax.removeItem(vline)
+                    self.graph_ax.removeItem(dummy_plot)
+                else:
+                    self.graph_ax.removeItem(self.graph_plots[signal_name])
                 del self.graph_plots[signal_name]
 
                 # Update colormap, display, and slider
                 self.cm.release_color(signal_name)
-                self.update_selected_signals_display()
-                self.set_slider_range()
+                self.update_qva_on_item_change()
         else:
             item_added = self._view_model.select_item(item_path)
 
             if item_added:
-                self.add_signal(item, item_path)
+                self.add_signal(item, item_path, update_qva=True)
 
     def parse_and_load_conf(self, path: pathlib.Path):
         self._view_model.parse_and_load_conf(path)
 
-    def add_signal(self, item: QStandardItem, item_path: list):
+    def update_qva_on_item_change(self):
+        """ Function to update and refresh the QVA application. """
+        self.graph_ax.autoBtnClicked()
+        self.update_selected_signals_display()
+        self.set_default_selected_signals_data_insight()
+        self.set_slider_range()
+
+    def add_di_item(self, item: QStandardItem, update_qva: bool):
+        """
+        Adds an item only to the data insight and updates the slider if enabled.
+        :param item: Item to be added
+        :param update_qva: Updates the data insight and slider range
+        :return:
+        """
+        # Highlight item in the tree menu
+        item.setBackground(QColor(self.theme.accent))
+        item.setForeground(QColor(self.theme.accent_text))
+
+        if update_qva:
+            time = self.slider.value() / self.slider_scaling_factor
+            self.set_time_based_data_insight(time)
+            self.set_slider_range()
+
+    def add_signal(self, item: QStandardItem, item_path: list, update_qva: bool):
+        """
+        Adds an item to the graph view, and updates the display and data insight if enabled.
+        :param item: Item to be added
+        :param item_path: List of strings representing the path in either the tree or "parent/child" in memory.
+        :param update_qva: Updates the QVA, e.g., display and data insight
+        :return:
+        """
+        if self._view_model.is_di_already_selected(item_path):
+            self._view_model.deselect_item(item_path, backend_memory=self._view_model.selected_di_only_data)
+
         # Highlight item in the tree menu
         item.setBackground(QColor(self.theme.highlight))
         item.setForeground(QColor(self.theme.highlight_text))
@@ -393,8 +535,8 @@ class QuadView(QMainWindow):
         ts, val, signal_name = self._view_model.get_signal_data(item_path)
         self.update_graph(ts, val, signal_name)
 
-        self.update_selected_signals_display()
-        self.set_slider_range()
+        if update_qva:
+            self.update_qva_on_item_change()
 
     def set_and_load_new_mat(self, path: pathlib.Path):
         self._view_model.set_and_load_mat(path)
@@ -454,6 +596,7 @@ class QuadView(QMainWindow):
             self.clear_graph_view_plots()
             self.clear_tree_highlighting()
             self.textbox_selected_signals.setPlainText("")
+            self.di_text_item.setPlainText("")
             self._view_model.deselect_all_signals()
             self.cm.reset()
             self.global_ts_ref_bar.set_placeholder_text(self._view_model.get_current_ts_placeholder_text())
