@@ -28,6 +28,7 @@ class QuadView(QMainWindow):
         self._view_model = view_model
         self._view_model.signal_new_data_loaded.connect(self.on_data_file_load)
         self._view_model.signal_silent_add_plot.connect(self.add_signal)
+        self._view_model.signal_silent_add_di.connect(self.add_di_item)
         self._view_model.signal_chosen_item_data_updated.connect(self.update_all_plots)
         self._view_model.signal_update_ts_bar_placeholder.connect(self.update_ts_bar_placeholder_text)
         self._view_model.signal_data_addition.connect(self.on_data_addition)
@@ -367,21 +368,26 @@ class QuadView(QMainWindow):
 
     def set_slider_range(self):
         """
-        Adjusts the slider's range and resets its value according to the x-values of all plotted data, assuming that
-        the x-values are increasing and in ascending order.
+        Adjusts the slider's range and resets its value according to the x-values of all plotted data and data insight
+        values, assuming that the x-values are increasing and in ascending order.
         """
-        if self.graph_plots == {}:
+        if self.graph_plots == {} and self._view_model.selected_di_only_data == {}:
             self.hard_reset_slider()
             return
 
+        di_min, di_max = self._view_model.get_time_range_in_data_insight()
+
         # Compute min
         x_vals = [item.getData()[0][0] for item in self.graph_plots.values() if not isinstance(item, tuple)]
-        if not x_vals:
-            return     # if only vertical lines
+        if not x_vals and di_min == float("inf"):
+            return     # if only vertical lines and no DI
+
+        x_vals.append(di_min)
         current_min = int(min(x_vals))
 
         # Compute max
         x_vals = [item.getData()[0][-1] for item in self.graph_plots.values() if not isinstance(item, tuple)]
+        x_vals.append(di_max)
         current_max = int(np.ceil(max(x_vals)))
 
         # Scale
@@ -446,12 +452,7 @@ class QuadView(QMainWindow):
             item_added = self._view_model.select_item(item_path, backend_memory=self._view_model.selected_di_only_data)
 
             if item_added:
-                time = self.slider.value() / self.slider_scaling_factor
-                self.set_time_based_data_insight(time)
-
-                # Highlight item in the tree menu
-                item.setBackground(QColor(self.theme.accent))
-                item.setForeground(QColor(self.theme.accent_text))
+                self.add_di_item(item, update_qva=True)
 
     def on_tree_item_double_clicked(self, index: QModelIndex):
         """ Handles tree menu clicking features (except for right-clicking). """
@@ -498,6 +499,22 @@ class QuadView(QMainWindow):
         self.update_selected_signals_display()
         self.set_default_selected_signals_data_insight()
         self.set_slider_range()
+
+    def add_di_item(self, item: QStandardItem, update_qva: bool):
+        """
+        Adds an item only to the data insight and updates the slider if enabled.
+        :param item: Item to be added
+        :param update_qva: Updates the data insight and slider range
+        :return:
+        """
+        # Highlight item in the tree menu
+        item.setBackground(QColor(self.theme.accent))
+        item.setForeground(QColor(self.theme.accent_text))
+
+        if update_qva:
+            time = self.slider.value() / self.slider_scaling_factor
+            self.set_time_based_data_insight(time)
+            self.set_slider_range()
 
     def add_signal(self, item: QStandardItem, item_path: list, update_qva: bool):
         """

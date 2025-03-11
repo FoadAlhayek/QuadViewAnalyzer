@@ -30,11 +30,21 @@ class QuadModel:
         return loadmat(filepath)
 
     @staticmethod
-    def parse_conf(path: pathlib.Path, sep=";"):
+    def parse_conf(path: pathlib.Path, sep=";", secondary_sep="/") -> tuple[list, list]:
+        """
+        Parses a .conf file by splitting non-comment, non-empty lines into tokens.
+        Lines containing the secondary separator are handled separately.
+
+        :param path: Path to the .conf file.
+        :param sep: Primary delimiter (default: ";").
+        :param secondary_sep: Secondary delimiter (default: "/").
+        :return: Tuple (primary_data, secondary_data), where each is a list of token lists.
+        """
         if path.suffix != ".conf":
-            return []
+            return [], []
 
         parsed_data = []
+        secondary_data = []
         with open(path, "r", encoding="utf-8") as fid:
             for row in fid:
                 row = row.strip()
@@ -44,10 +54,14 @@ class QuadModel:
                     continue
 
                 # Split based on sep and handle edge case of removing empty strings (caused by excess of sep)
-                items = [item.strip() for item in row.split(sep)]
-                items = [item for item in items if item.strip()]
-                parsed_data.append(items)
-        return parsed_data
+                if secondary_sep in row:
+                    items = [item.strip() for item in row.split(secondary_sep) if item.strip()]
+                    secondary_data.append(items)
+                else:
+                    items = [item.strip() for item in row.split(sep) if item.strip()]
+                    parsed_data.append(items)
+
+        return parsed_data, secondary_data
 
     @staticmethod
     def invalid_signal(path) -> bool:

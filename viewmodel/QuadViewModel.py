@@ -20,6 +20,7 @@ class QuadViewModel(QObject):
     # Signals are initialize here - Signal(args) need to match with the emit and the function it connects to
     signal_new_data_loaded = Signal()                                 # Notifies the View, that a new data file is loaded
     signal_silent_add_plot = Signal(QStandardItem, list, bool) # -||- to plot a newly added item without updating QVA
+    signal_silent_add_di = Signal(QStandardItem, bool)         # -||- to add an item to the data insight without updating QVA
     signal_chosen_item_data_updated = Signal()                        # -||- that the chosen item data is updated
     signal_update_ts_bar_placeholder = Signal()                       # -||- to update the placeholder text in ts bar
     signal_data_addition = Signal(str, list)                   # -||- to add new items to the tree menu
@@ -180,15 +181,17 @@ class QuadViewModel(QObject):
 
     def parse_and_load_conf(self, path: pathlib.Path):
         """
-        Parses the configuration file, extracts the signals, and updates the view if they exist by emitting the item and
-        item path with the Signal "signal_add_plot".
+        Parses the configuration file, extracts the signals, and updates the view if they exist.
+        Data parsed with seperator ";" are plotted and added normally, while data parsed with the secondary separator
+        are only added to the data insight.
 
         :param path: Path to the configuration file.
         """
         at_least_one_addition = False
-        parsed_conf_data = self._model.parse_conf(path, sep=";")
+        parsed_item_conf_data, parsed_di_conf_data = self._model.parse_conf(path, sep=";", secondary_sep="/")
 
-        for item_path in parsed_conf_data:
+        # Plot the parsed data
+        for item_path in parsed_item_conf_data:
             if self.is_signal_already_selected(item_path):
                 continue
 
@@ -203,6 +206,23 @@ class QuadViewModel(QObject):
                     return
 
                 self.signal_silent_add_plot.emit(item, item_path, False)
+
+        # Display the parsed data (only in data insight)
+        for item_path in parsed_di_conf_data:
+            if self.is_signal_already_selected(item_path) or self.is_di_already_selected(item_path):
+                continue
+
+            item_added = self.select_item(item_path, backend_memory=self.selected_di_only_data)
+            if item_added:
+                at_least_one_addition = True
+                item = self.find_tree_item_by_path(item_path)
+
+                if item is None:
+                    self.deselect_item(item_path, backend_memory=self.selected_di_only_data)
+                    return
+
+                # Only highlight, update DI text once in the end
+                self.signal_silent_add_di.emit(item, False)
 
         if at_least_one_addition:
             self.signal_update_qva.emit()
@@ -246,6 +266,28 @@ class QuadViewModel(QObject):
         if config_files:
             for conf in config_files:
                 self.parse_and_load_conf(conf)
+
+    def get_time_range_in_data_insight(self) -> tuple[float, float]:
+        """
+        Computes the global minimum and maximum timestamps from the selected data insight.
+        :return: min and max, if not found inf and -inf
+        """
+        min_ts = float("inf")
+        max_ts = -float("inf")
+
+        for entries in self.selected_di_only_data.values():
+            first_value = next(iter(entries.values()), None)
+            if isinstance(first_value, dict):
+                for custom_entries in entries.values():
+                    ts = custom_entries["ts"]
+                    min_ts = min(min_ts, ts[0])
+                    max_ts = max(max_ts, ts[-1])
+            elif "ts" in entries:
+                ts = entries["ts"]
+                min_ts = min(min_ts, ts[0])
+                max_ts = max(max_ts, ts[-1])
+
+        return min_ts, max_ts
 
     def get_time_based_data_insight(self, graph_plots: dict, ref_time: float) -> str:
         """
