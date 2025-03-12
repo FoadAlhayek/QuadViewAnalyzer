@@ -1,0 +1,11 @@
+[project]
+name = "quadviewanalyzer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyqtgraph>=0.13.7",
+    "pyside6>=6.8.2.1",
+    "scipy>=1.15.2",
+]
