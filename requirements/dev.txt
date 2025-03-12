@@ -1,9 +1,0 @@
-# All packages used to run the app - Will do a pip freeze later
-# Note, this should extend the requirements.txt with e.g. pytest etc.
-PySide6
-PyInstaller
-pyqtgraph
-scipy
-pathlib
-
-# Dev only

@@ -1,4 +1,0 @@
-# Should only have the bare minimum to run the application
-PySide6
-PyInstaller
-scipy
